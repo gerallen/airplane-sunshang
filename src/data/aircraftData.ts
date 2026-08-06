@@ -1,213 +1,208 @@
-import type { AircraftModel } from '@/types/aircraft';
+import type { AircraftModel, DamageRecord, DamageStats, MonthlyStats } from "@/types"
 
-const generateDamageHistory = (baseCount: number) => {
-  const types: Array<'cut' | 'puncture' | 'wear' | 'bulge' | 'crack'> = ['cut', 'puncture', 'wear', 'bulge', 'crack'];
-  const positions: Array<'tread' | 'sidewall' | 'shoulder' | 'bead'> = ['tread', 'sidewall', 'shoulder', 'bead'];
-  const severities: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
-  const descriptions: Array<{ text: string; size: string }> = [
-    { text: '胎面纵向划伤', size: '25x3mm' },
-    { text: '胎肩区域磨损超标', size: '40x8mm' },
-    { text: '胎侧扎伤', size: '5mm深' },
-    { text: '胎圈区域裂纹', size: '12x2mm' },
-    { text: '胎面不均匀磨损', size: '深度3mm' },
-    { text: '异物扎入胎体', size: '8mm深' },
-    { text: '胎侧鼓包变形', size: '15x10mm' },
-    { text: '胎冠横向割伤', size: '18x4mm' },
-    { text: '胎肩剥离', size: '30x5mm' },
-    { text: '胎面龟裂', size: '20x3mm' },
-  ];
-  const history = [];
-  const count = baseCount + Math.floor(Math.random() * 3);
-  for (let i = 0; i < count; i++) {
-    const desc = descriptions[Math.floor(Math.random() * descriptions.length)];
-    history.push({
-      type: types[Math.floor(Math.random() * types.length)],
-      severity: severities[Math.floor(Math.random() * severities.length)],
-      position: positions[Math.floor(Math.random() * positions.length)],
-      date: `2025-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-      description: desc.text,
-      size: desc.size,
-    });
-  }
-  return history;
-};
-
-const generateMonthlyStats = (damageCount: number) => {
-  const stats = [];
-  let remaining = damageCount;
-  for (let i = 0; i < 12; i++) {
-    const maxForMonth = Math.min(remaining, Math.floor(Math.random() * 3));
-    stats.push(maxForMonth);
-    remaining -= maxForMonth;
-  }
-  while (remaining > 0) {
-    const idx = Math.floor(Math.random() * 12);
-    stats[idx]++;
-    remaining--;
-  }
-  return stats;
-};
-
-/*
- * 编号规则：面对飞机方向（站在机头前看向机尾）
- * - 前起落架（前轮）保持独立编号：前-左、前-右
- * - 主起落架从右往左依次编号（面对飞机时，从右手边往左手边）
- *   = 飞机左侧（翼尖→机身）→ 飞机右侧（机身→翼尖）
- *   = z值从大到小排列
- */
+// ========== 5 种机型轮胎坐标与数据 ==========
+// 坐标系: x=前后(nose-to-tail), y=上下(vertical), z=左右(wingspan, 左正右负)
+// 编号规则: 面对飞机, 前起落架独立, 主起落架从右往左(按 z 降序)依次编号
 
 export const aircraftModels: AircraftModel[] = [
   {
-    id: 'A320',
-    name: 'A320-200',
-    manufacturer: 'Airbus',
+    id: "a320",
+    name: "空客 A320",
+    type: "窄体客机",
     tireCount: 6,
-    fuselageLength: 18,
-    fuselageRadius: 1.95,
-    wingSpan: 11.76,
-    engineRadius: 1.2,
     tires: [
-      // 前起落架（前轮）
-      { id: '前-左', label: '前起落架-左轮', position: [5.5, -1.2, 0.9], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-20', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '前-右', label: '前起落架-右轮', position: [5.5, -1.2, -0.9], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-18', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
-      // 主起落架：面对飞机从右往左 = z从大到小
-      // 左侧（z>0，外侧→内侧）
-      { id: '2号', label: '主起落架-左内侧', position: [-1.5, -1.4, 2.8], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-15', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      { id: '1号', label: '主起落架-左外侧', position: [-1.5, -1.4, 4.2], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-14', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      // 右侧（z<0，内侧→外侧）
-      { id: '3号', label: '主起落架-右内侧', position: [-1.5, -1.4, -2.8], rotation: [0, 0, Math.PI / 2], damageCount: 8, lastInspect: '2026-06-10', status: 'critical', damageHistory: generateDamageHistory(8), monthlyStats: generateMonthlyStats(8) },
-      { id: '4号', label: '主起落架-右外侧', position: [-1.5, -1.4, -4.2], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-12', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
+      // 前起落架 (独立编号, nose gear)
+      { id: "ng",  position: [14.0, 0, 0],   status: "normal", label: "前轮" },
+      // 主起落架: 面对飞机从右往左 (z 降序)
+      { id: "m1", position: [4.0, 0, 3.5],  status: "normal", label: "1号" },
+      { id: "m2", position: [4.0, 0, -3.5], status: "warning", label: "2号" },
+      { id: "m3", position: [-2.0, 0, 3.5], status: "normal", label: "3号" },
+      { id: "m4", position: [-2.0, 0, -3.5], status: "critical", label: "4号" },
+      { id: "m5", position: [-6.0, 0, 0],    status: "normal", label: "5号" },
     ],
   },
   {
-    id: 'B737',
-    name: 'B737-800',
-    manufacturer: 'Boeing',
+    id: "b737",
+    name: "波音 B737",
+    type: "窄体客机",
     tireCount: 6,
-    fuselageLength: 19.5,
-    fuselageRadius: 2.0,
-    wingSpan: 12.3,
-    engineRadius: 1.15,
     tires: [
-      { id: '前-左', label: '前起落架-左轮', position: [6.0, -1.2, 0.85], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-19', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '前-右', label: '前起落架-右轮', position: [6.0, -1.2, -0.85], rotation: [0, 0, Math.PI / 2], damageCount: 0, lastInspect: '2026-06-21', status: 'normal', damageHistory: [], monthlyStats: generateMonthlyStats(0) },
-      // 主起落架：面对飞机从右往左 = z从大到小
-      { id: '2号', label: '主起落架-左内侧', position: [-1.2, -1.4, 2.6], rotation: [0, 0, Math.PI / 2], damageCount: 6, lastInspect: '2026-06-16', status: 'warning', damageHistory: generateDamageHistory(6), monthlyStats: generateMonthlyStats(6) },
-      { id: '1号', label: '主起落架-左外侧', position: [-1.2, -1.4, 3.9], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-20', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '3号', label: '主起落架-右内侧', position: [-1.2, -1.4, -2.6], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-17', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
-      { id: '4号', label: '主起落架-右外侧', position: [-1.2, -1.4, -3.9], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-22', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
+      { id: "ng",  position: [13.5, 0, 0],   status: "normal", label: "前轮" },
+      { id: "m1", position: [3.5, 0, 3.2],  status: "normal", label: "1号" },
+      { id: "m2", position: [3.5, 0, -3.2], status: "warning", label: "2号" },
+      { id: "m3", position: [-1.5, 0, 3.2], status: "normal", label: "3号" },
+      { id: "m4", position: [-1.5, 0, -3.2], status: "normal", label: "4号" },
+      { id: "m5", position: [-5.5, 0, 0],    status: "normal", label: "5号" },
     ],
   },
   {
-    id: 'A330',
-    name: 'A330-300',
-    manufacturer: 'Airbus',
+    id: "a330",
+    name: "空客 A330",
+    type: "宽体客机",
     tireCount: 10,
-    fuselageLength: 24.5,
-    fuselageRadius: 2.65,
-    wingSpan: 16.1,
-    engineRadius: 1.65,
     tires: [
-      { id: '前-左', label: '前起落架-左轮', position: [7.5, -1.4, 1.1], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-21', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
-      { id: '前-右', label: '前起落架-右轮', position: [7.5, -1.4, -1.1], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-19', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      // 主起落架：面对飞机从右往左 = z从大到小
-      // 左侧（z>0，翼尖→机身）
-      { id: '4号', label: '主起落架-左4', position: [-2.0, -1.6, 3.2], rotation: [0, 0, Math.PI / 2], damageCount: 7, lastInspect: '2026-06-14', status: 'critical', damageHistory: generateDamageHistory(7), monthlyStats: generateMonthlyStats(7) },
-      { id: '3号', label: '主起落架-左3', position: [-2.0, -1.6, 4.8], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-13', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      { id: '2号', label: '主起落架-左2', position: [-2.0, -1.6, 6.0], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-18', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '1号', label: '主起落架-左1', position: [-2.0, -1.6, 7.2], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-16', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
-      // 右侧（z<0，机身→翼尖）
-      { id: '5号', label: '主起落架-右1', position: [-2.0, -1.6, -3.2], rotation: [0, 0, Math.PI / 2], damageCount: 6, lastInspect: '2026-06-15', status: 'warning', damageHistory: generateDamageHistory(6), monthlyStats: generateMonthlyStats(6) },
-      { id: '6号', label: '主起落架-右2', position: [-2.0, -1.6, -4.8], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-20', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '7号', label: '主起落架-右3', position: [-2.0, -1.6, -6.0], rotation: [0, 0, Math.PI / 2], damageCount: 9, lastInspect: '2026-06-11', status: 'critical', damageHistory: generateDamageHistory(9), monthlyStats: generateMonthlyStats(9) },
-      { id: '8号', label: '主起落架-右4', position: [-2.0, -1.6, -7.2], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-17', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
+      { id: "ng",  position: [18.0, 0, 0],    status: "normal", label: "前轮" },
+      { id: "m1", position: [6.0, 0, 5.5],   status: "normal", label: "1号" },
+      { id: "m2", position: [6.0, 0, -5.5],  status: "normal", label: "2号" },
+      { id: "m3", position: [2.0, 0, 5.5],   status: "warning", label: "3号" },
+      { id: "m4", position: [2.0, 0, -5.5],  status: "normal", label: "4号" },
+      { id: "m5", position: [-2.0, 0, 5.5],  status: "normal", label: "5号" },
+      { id: "m6", position: [-2.0, 0, -5.5], status: "critical", label: "6号" },
+      { id: "m7", position: [-6.0, 0, 5.5],  status: "normal", label: "7号" },
+      { id: "m8", position: [-6.0, 0, -5.5], status: "normal", label: "8号" },
+      { id: "m9", position: [-10.0, 0, 0],  status: "normal", label: "9号" },
     ],
   },
   {
-    id: 'B777',
-    name: 'B777-300ER',
-    manufacturer: 'Boeing',
+    id: "b777",
+    name: "波音 B777",
+    type: "宽体客机",
     tireCount: 14,
-    fuselageLength: 31.0,
-    fuselageRadius: 2.85,
-    wingSpan: 19.4,
-    engineRadius: 2.0,
     tires: [
-      { id: '前-左', label: '前起落架-左轮', position: [9.5, -1.5, 1.2], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-18', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '前-右', label: '前起落架-右轮', position: [9.5, -1.5, -1.2], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-20', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
-      // 主起落架：面对飞机从右往左 = z从大到小
-      // 左侧（z>0，翼尖→机身）
-      { id: '6号', label: '主起落架-左6', position: [-3.0, -1.8, 3.5], rotation: [0, 0, Math.PI / 2], damageCount: 8, lastInspect: '2026-06-12', status: 'critical', damageHistory: generateDamageHistory(8), monthlyStats: generateMonthlyStats(8) },
-      { id: '5号', label: '主起落架-左5', position: [-3.0, -1.8, 5.0], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-16', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
-      { id: '4号', label: '主起落架-左4', position: [-3.0, -1.8, 6.2], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-19', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '3号', label: '主起落架-左3', position: [-3.0, -1.8, 7.7], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-14', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      { id: '2号', label: '主起落架-左2', position: [-3.0, -1.8, 8.9], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-21', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '1号', label: '主起落架-左1', position: [-3.0, -1.8, 10.4], rotation: [0, 0, Math.PI / 2], damageCount: 6, lastInspect: '2026-06-13', status: 'warning', damageHistory: generateDamageHistory(6), monthlyStats: generateMonthlyStats(6) },
-      // 右侧（z<0，机身→翼尖）
-      { id: '7号', label: '主起落架-右1', position: [-3.0, -1.8, -3.5], rotation: [0, 0, Math.PI / 2], damageCount: 7, lastInspect: '2026-06-15', status: 'critical', damageHistory: generateDamageHistory(7), monthlyStats: generateMonthlyStats(7) },
-      { id: '8号', label: '主起落架-右2', position: [-3.0, -1.8, -5.0], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-18', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '9号', label: '主起落架-右3', position: [-3.0, -1.8, -6.2], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-17', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
-      { id: '10号', label: '主起落架-右4', position: [-3.0, -1.8, -7.7], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-22', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
-      { id: '11号', label: '主起落架-右5', position: [-3.0, -1.8, -8.9], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-14', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      { id: '12号', label: '主起落架-右6', position: [-3.0, -1.8, -10.4], rotation: [0, 0, Math.PI / 2], damageCount: 9, lastInspect: '2026-06-10', status: 'critical', damageHistory: generateDamageHistory(9), monthlyStats: generateMonthlyStats(9) },
+      { id: "ng",  position: [22.0, 0, 0],    status: "normal", label: "前轮" },
+      { id: "m1", position: [8.0, 0, 6.5],   status: "normal", label: "1号" },
+      { id: "m2", position: [8.0, 0, -6.5],  status: "normal", label: "2号" },
+      { id: "m3", position: [4.0, 0, 6.5],   status: "warning", label: "3号" },
+      { id: "m4", position: [4.0, 0, -6.5],  status: "normal", label: "4号" },
+      { id: "m5", position: [0.0, 0, 6.5],    status: "normal", label: "5号" },
+      { id: "m6", position: [0.0, 0, -6.5],   status: "critical", label: "6号" },
+      { id: "m7", position: [-4.0, 0, 6.5],  status: "normal", label: "7号" },
+      { id: "m8", position: [-4.0, 0, -6.5], status: "normal", label: "8号" },
+      { id: "m9", position: [-8.0, 0, 6.5],  status: "warning", label: "9号" },
+      { id: "m10", position: [-8.0, 0, -6.5], status: "normal", label: "10号" },
+      { id: "m11", position: [-12.0, 0, 6.5], status: "normal", label: "11号" },
+      { id: "m12", position: [-12.0, 0, -6.5], status: "normal", label: "12号" },
+      { id: "m13", position: [-16.0, 0, 0],   status: "normal", label: "13号" },
     ],
   },
   {
-    id: 'A380',
-    name: 'A380-800',
-    manufacturer: 'Airbus',
-    tireCount: 21,
-    fuselageLength: 34.0,
-    fuselageRadius: 3.55,
-    wingSpan: 22.1,
-    engineRadius: 1.85,
+    id: "a380",
+    name: "空客 A380",
+    type: "超大型客机",
+    tireCount: 22,
     tires: [
-      { id: '前-左', label: '前起落架-左轮', position: [10.5, -1.6, 1.3], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-21', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
-      { id: '前-中', label: '前起落架-中轮', position: [10.5, -1.6, 0], rotation: [0, 0, Math.PI / 2], damageCount: 0, lastInspect: '2026-06-22', status: 'normal', damageHistory: [], monthlyStats: generateMonthlyStats(0) },
-      { id: '前-右', label: '前起落架-右轮', position: [10.5, -1.6, -1.3], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-19', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      // 主起落架：面对飞机从右往左 = z从大到小
-      // 左侧机翼下（z>0，翼尖→机身）
-      { id: '5号', label: '机翼主起落架-左5', position: [-4.0, -1.8, 7.5], rotation: [0, 0, Math.PI / 2], damageCount: 8, lastInspect: '2026-06-12', status: 'critical', damageHistory: generateDamageHistory(8), monthlyStats: generateMonthlyStats(8) },
-      { id: '4号', label: '机翼主起落架-左4', position: [-4.0, -1.8, 8.7], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-17', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
-      { id: '3号', label: '机翼主起落架-左3', position: [-4.0, -1.8, 9.9], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-19', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '2号', label: '机翼主起落架-左2', position: [-4.0, -1.8, 11.1], rotation: [0, 0, Math.PI / 2], damageCount: 7, lastInspect: '2026-06-13', status: 'critical', damageHistory: generateDamageHistory(7), monthlyStats: generateMonthlyStats(7) },
-      { id: '1号', label: '机翼主起落架-左1', position: [-4.0, -1.8, 12.3], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-20', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      // 左侧机身下（z>0，继续往机身方向）
-      { id: '9号', label: '机身主起落架-左4', position: [-2.0, -1.8, 3.0], rotation: [0, 0, Math.PI / 2], damageCount: 6, lastInspect: '2026-06-15', status: 'warning', damageHistory: generateDamageHistory(6), monthlyStats: generateMonthlyStats(6) },
-      { id: '8号', label: '机身主起落架-左3', position: [-2.0, -1.8, 4.2], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-18', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '7号', label: '机身主起落架-左2', position: [-2.0, -1.8, 5.4], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-17', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
-      { id: '6号', label: '机身主起落架-左1', position: [-2.0, -1.8, 6.6], rotation: [0, 0, Math.PI / 2], damageCount: 1, lastInspect: '2026-06-22', status: 'normal', damageHistory: generateDamageHistory(1), monthlyStats: generateMonthlyStats(1) },
-      // 右侧机身下（z<0，机身→外侧）
-      { id: '10号', label: '机身主起落架-右1', position: [-2.0, -1.8, -3.0], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-14', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      { id: '11号', label: '机身主起落架-右2', position: [-2.0, -1.8, -4.2], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-20', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '12号', label: '机身主起落架-右3', position: [-2.0, -1.8, -5.4], rotation: [0, 0, Math.PI / 2], damageCount: 3, lastInspect: '2026-06-18', status: 'normal', damageHistory: generateDamageHistory(3), monthlyStats: generateMonthlyStats(3) },
-      { id: '13号', label: '机身主起落架-右4', position: [-2.0, -1.8, -6.6], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-15', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      // 右侧机翼下（z<0，继续往翼尖方向）
-      { id: '14号', label: '机翼主起落架-右1', position: [-4.0, -1.8, -7.5], rotation: [0, 0, Math.PI / 2], damageCount: 5, lastInspect: '2026-06-16', status: 'warning', damageHistory: generateDamageHistory(5), monthlyStats: generateMonthlyStats(5) },
-      { id: '15号', label: '机翼主起落架-右2', position: [-4.0, -1.8, -8.7], rotation: [0, 0, Math.PI / 2], damageCount: 2, lastInspect: '2026-06-21', status: 'normal', damageHistory: generateDamageHistory(2), monthlyStats: generateMonthlyStats(2) },
-      { id: '16号', label: '机翼主起落架-右3', position: [-4.0, -1.8, -9.9], rotation: [0, 0, Math.PI / 2], damageCount: 6, lastInspect: '2026-06-14', status: 'warning', damageHistory: generateDamageHistory(6), monthlyStats: generateMonthlyStats(6) },
-      { id: '17号', label: '机翼主起落架-右4', position: [-4.0, -1.8, -11.1], rotation: [0, 0, Math.PI / 2], damageCount: 9, lastInspect: '2026-06-11', status: 'critical', damageHistory: generateDamageHistory(9), monthlyStats: generateMonthlyStats(9) },
-      { id: '18号', label: '机翼主起落架-右5', position: [-4.0, -1.8, -12.3], rotation: [0, 0, Math.PI / 2], damageCount: 4, lastInspect: '2026-06-16', status: 'warning', damageHistory: generateDamageHistory(4), monthlyStats: generateMonthlyStats(4) },
+      { id: "ng",  position: [28.0, 0, 0],    status: "normal", label: "前轮" },
+      { id: "m1", position: [12.0, 0, 8.0],   status: "normal", label: "1号" },
+      { id: "m2", position: [12.0, 0, -8.0],  status: "normal", label: "2号" },
+      { id: "m3", position: [8.0, 0, 8.0],    status: "warning", label: "3号" },
+      { id: "m4", position: [8.0, 0, -8.0],   status: "normal", label: "4号" },
+      { id: "m5", position: [4.0, 0, 8.0],    status: "normal", label: "5号" },
+      { id: "m6", position: [4.0, 0, -8.0],   status: "critical", label: "6号" },
+      { id: "m7", position: [0.0, 0, 8.0],    status: "normal", label: "7号" },
+      { id: "m8", position: [0.0, 0, -8.0],   status: "normal", label: "8号" },
+      { id: "m9", position: [-4.0, 0, 8.0],   status: "warning", label: "9号" },
+      { id: "m10", position: [-4.0, 0, -8.0],  status: "normal", label: "10号" },
+      { id: "m11", position: [-8.0, 0, 8.0],   status: "normal", label: "11号" },
+      { id: "m12", position: [-8.0, 0, -8.0],  status: "normal", label: "12号" },
+      { id: "m13", position: [-12.0, 0, 8.0],  status: "warning", label: "13号" },
+      { id: "m14", position: [-12.0, 0, -8.0], status: "normal", label: "14号" },
+      { id: "m15", position: [-16.0, 0, 8.0],  status: "normal", label: "15号" },
+      { id: "m16", position: [-16.0, 0, -8.0], status: "normal", label: "16号" },
+      { id: "m17", position: [-20.0, 0, 8.0],  status: "normal", label: "17号" },
+      { id: "m18", position: [-20.0, 0, -8.0], status: "normal", label: "18号" },
+      { id: "m19", position: [-24.0, 0, 4.0],  status: "normal", label: "19号" },
+      { id: "m20", position: [-24.0, 0, -4.0], status: "normal", label: "20号" },
+      { id: "m21", position: [-28.0, 0, 0],    status: "normal", label: "21号" },
     ],
   },
-];
+]
 
-export const getAircraftById = (id: string): AircraftModel | undefined => {
-  return aircraftModels.find(a => a.id === id);
-};
+// ========== 辅助函数 ==========
 
-export const getStatusColor = (status: string): string => {
+export function getStatusColor(status: string): string {
   switch (status) {
-    case 'critical': return '#FF3B30';
-    case 'warning': return '#FFD60A';
-    default: return '#00D2FF';
+    case "normal": return "#00D2FF"
+    case "warning": return "#FFD60A"
+    case "critical": return "#FF3B30"
+    default: return "#00D2FF"
   }
-};
+}
 
-export const getStatusText = (status: string): string => {
+export function getStatusText(status: string): string {
   switch (status) {
-    case 'critical': return '严重';
-    case 'warning': return '预警';
-    default: return '正常';
+    case "normal": return "正常"
+    case "warning": return "警告"
+    case "critical": return "严重"
+    default: return "正常"
   }
-};
+}
+
+// ========== 生成模拟损伤历史 ==========
+
+export function generateDamageHistory(modelId: string, tireId: string): DamageRecord[] {
+  const baseDate = new Date("2024-01-15")
+  const records: DamageRecord[] = []
+  const count = 3 + Math.floor(Math.random() * 5)
+
+  const types = ["割伤", "磨损", "扎伤", "裂纹", "鼓包", "过热"]
+  const positions = ["胎面", "胎侧", "胎肩", "胎圈"]
+  const severities = ["轻微", "中等", "严重"]
+  const runways = ["跑道A", "跑道B", "跑道C"]
+  const departures = ["北京", "上海", "广州", "深圳", "成都"]
+
+  for (let i = 0; i < count; i++) {
+    const date = new Date(baseDate)
+    date.setDate(date.getDate() + i * 45 + Math.floor(Math.random() * 15))
+
+    records.push({
+      id: `${modelId}-${tireId}-${i}`,
+      tireId,
+      modelId,
+      date: date.toISOString().split("T")[0],
+      type: types[Math.floor(Math.random() * types.length)],
+      position: positions[Math.floor(Math.random() * positions.length)],
+      severity: severities[Math.floor(Math.random() * severities.length)] as "轻微" | "中等" | "严重",
+      description: `轮胎${tireId}发现${types[Math.floor(Math.random() * types.length)]}，需定期检查。`,
+      runway: runways[Math.floor(Math.random() * runways.length)],
+      departure: departures[Math.floor(Math.random() * departures.length)],
+      recommendation:
+        Math.random() > 0.5
+          ? "建议下次维护时更换"
+          : "建议继续使用并加强监控",
+    })
+  }
+
+  return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+}
+
+// ========== 生成月度统计 ==========
+
+export function generateMonthlyStats(modelId: string): MonthlyStats[] {
+  const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
+  return months.map((month) => ({
+    month,
+    damageCount: Math.floor(Math.random() * 8),
+    severity: ["轻微", "中等", "严重"][Math.floor(Math.random() * 3)] as "轻微" | "中等" | "严重",
+  }))
+}
+
+// ========== 生成损伤概览统计 ==========
+
+export function generateDamageStats(modelId: string): DamageStats {
+  const model = aircraftModels.find((m) => m.id === modelId)
+  if (!model) {
+    return { total: 0, normal: 0, warning: 0, critical: 0, byType: {} }
+  }
+
+  const stats: DamageStats = {
+    total: 0,
+    normal: 0,
+    warning: 0,
+    critical: 0,
+    byType: {},
+  }
+
+  model.tires.forEach((tire) => {
+    if (tire.status === "normal") stats.normal++
+    else if (tire.status === "warning") stats.warning++
+    else if (tire.status === "critical") stats.critical++
+
+    const history = generateDamageHistory(modelId, tire.id)
+    history.forEach((record) => {
+      stats.total++
+      stats.byType[record.type] = (stats.byType[record.type] || 0) + 1
+    })
+  })
+
+  return stats
+}
