@@ -8,7 +8,6 @@
     "types": ["vite/client", "react", "react-dom"],
     "skipLibCheck": true,
 
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
