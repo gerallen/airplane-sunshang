@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Redirecting…</title>
+    <!--
+      GitHub Pages SPA 回退：
+      直接访问深层路由（如 /airplane-sunshang/detail/...）时 Pages 返回 404.html，
+      这里把原始路径存入 sessionStorage 并跳转回应用入口，
+      由 index.html 中的脚本恢复路由，交给 React Router 渲染对应页面。
+    -->
+    <script>
+      sessionStorage.setItem('spa-redirect', location.pathname + location.search + location.hash);
+      location.replace('/airplane-sunshang/');
+    </script>
+  </head>
+  <body></body>
+</html>

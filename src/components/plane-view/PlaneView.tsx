@@ -2,39 +2,55 @@ import { useMemo, useState, useCallback } from 'react';
 import { useApp } from '@/context/AppContext';
 import { aircraftModels, getStatusColor } from '@/data/aircraftData';
 
-/** Convert 3D tire position to 2D SVG coordinates */
-function tireToSvg(cx: number, cy: number, scale: number, pos: [number, number, number]) {
-  return { x: cx + (-pos[2]) * scale, y: cy + (-pos[0]) * scale };
-}
-
+/**
+ * 布局说明：
+ * 统一坐标系 = 机轮数据单位（约等于实际米数）。
+ * 屏幕 x = -position[2]（+z 为左舷），屏幕 y = -position[0]（机头向上）。
+ * 机身半长由机轮纵向分布决定：最前机轮（前轮）位于距中心 85% 处，
+ * 使前轮贴近机头、最后排机轮贴近机尾；翼展按图形自身宽高比（510:540）跟随。
+ * viewBox 直接取内容包围盒 + 留白，任何窗口尺寸下都完整显示。
+ */
 export function PlaneView() {
   const { selectedModelId, selectedTireId, setSelectedTireId } = useApp();
   const [hoveredTireId, setHoveredTireId] = useState<string | null>(null);
 
   const model = aircraftModels.find(a => a.id === selectedModelId) || aircraftModels[0];
 
-  const viewW = 800;
-  const viewH = 700;
-  const cx = viewW / 2;
-  const cy = viewH / 2 - 20;
-
-  // 机轮坐标≈实际米数：翼展≈主轮外側z×10.5，机身长≈翼展×(540/510)
-  // 飞机图形与轮胎点共用同一坐标尺度，保证轮胎落在机体对应位置
-  const { fitScale, planeScale } = useMemo(() => {
-    const zs = model.tires.map(t => Math.abs(t.position[2]));
+  const layout = useMemo(() => {
     const xs = model.tires.map(t => t.position[0]);
-    const maxZ = Math.max(...zs, 1);
-    const spreadX = Math.max(...xs) - Math.min(...xs);
-    const spanUnits = Math.max(maxZ * 10.5, 20);                 // 翼展（机轮坐标单位）
-    const lenUnits = Math.max(spanUnits * (540 / 510), spreadX * 1.5, 20); // 机身长
-    const fit = Math.min(
-      (viewW - 180) / spanUnits,
-      (viewH - 100) / lenUnits
-    );
-    return { fitScale: fit, planeScale: (spanUnits * fit) / 510 };
+    const zs = model.tires.map(t => t.position[2]);
+    const maxX = Math.max(...xs);
+    const minX = Math.min(...xs);
+    const maxAbsZ = Math.max(...zs.map(z => Math.abs(z)), 1);
+    const midX = (maxX + minX) / 2;
+
+    // 机身半长：最前/最后机轮距分布中心 85% 处
+    const halfLen = Math.max((maxX - midX) / 0.85, (midX - minX) / 0.85, 8);
+    // 图形半长 270 图形单位 → halfLen 机轮单位；半翼展 255 图形单位同比跟随
+    const planeScale = halfLen / 270;
+    const halfSpan = 255 * planeScale;
+
+    // 轮廓中心对齐机轮分布中心（z 数据左右对称，x 不一定对称）
+    const ccx = 0;
+    const ccy = -midX;
+
+    // 内容包围盒 + 留白
+    const pad = halfSpan * 0.12 + 1;
+    const minCX = Math.min(-maxAbsZ, ccx - halfSpan) - pad;
+    const maxCX = Math.max(maxAbsZ, ccx + halfSpan) + pad;
+    const minCY = Math.min(-maxX, ccy - halfLen) - pad;
+    const maxCY = Math.max(-minX, ccy + halfLen) + pad;
+    const w = maxCX - minCX;
+    const h = maxCY - minCY;
+
+    // 相对尺寸单位：点、字、描边都按包围盒宽度缩放，保证各机型屏幕观感一致
+    const u = w / 100;
+
+    return { ccx, ccy, planeScale, halfLen, minCX, minCY, w, h, u };
   }, [model]);
 
-  const tireR = Math.max(6, Math.min(10, fitScale * 2));
+  const { ccx, ccy, planeScale, halfLen, minCX, minCY, w, h, u } = layout;
+  const tireR = u * 1.5;
 
   const handleSelect = useCallback((id: string) => {
     setSelectedTireId(selectedTireId === id ? null : id);
@@ -42,22 +58,22 @@ export function PlaneView() {
 
   return (
     <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: '#0A0A0C' }}>
-      <svg viewBox={`0 0 ${viewW} ${viewH}`} className="w-full h-full" style={{ maxWidth: '100%', maxHeight: '100%' }}>
+      <svg viewBox={`${minCX} ${minCY} ${w} ${h}`} className="w-full h-full" style={{ maxWidth: '100%', maxHeight: '100%' }}>
         <defs>
           {/* Grid pattern */}
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#151518" strokeWidth="0.5" />
+          <pattern id="grid" width={5 * u} height={5 * u} patternUnits="userSpaceOnUse">
+            <path d={`M ${5 * u} 0 L 0 0 0 ${5 * u}`} fill="none" stroke="#151518" strokeWidth={0.08 * u} />
           </pattern>
 
           {/* Glow filter for active elements */}
           <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feGaussianBlur stdDeviation={0.5 * u} result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
 
           {/* Soft glow for selection */}
           <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feGaussianBlur stdDeviation={0.3 * u} result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
 
@@ -77,16 +93,16 @@ export function PlaneView() {
         </defs>
 
         {/* Background grid */}
-        <rect width={viewW} height={viewH} fill="url(#grid)" />
+        <rect x={minCX} y={minCY} width={w} height={h} fill="url(#grid)" />
 
         {/* Center crosshair - subtle */}
-        <g stroke="#2A2A30" strokeWidth="0.8">
-          <line x1={cx - 14} y1={cy} x2={cx + 14} y2={cy} />
-          <line x1={cx} y1={cy - 14} x2={cx} y2={cy + 14} />
+        <g stroke="#2A2A30" strokeWidth={0.12 * u}>
+          <line x1={ccx - 1.75 * u} y1={ccy} x2={ccx + 1.75 * u} y2={ccy} />
+          <line x1={ccx} y1={ccy - 1.75 * u} x2={ccx} y2={ccy + 1.75 * u} />
         </g>
 
         {/* ========== AIRCRAFT SVG SILHOUETTE ========== */}
-        <g transform={`translate(${cx}, ${cy}) scale(${planeScale}) translate(-400, -330)`}>
+        <g transform={`translate(${ccx}, ${ccy}) scale(${planeScale}) translate(-400, -330)`}>
 
           {/* Fuselage main body */}
           <path
@@ -177,36 +193,35 @@ export function PlaneView() {
               <line x1={x} y1="415" x2={x} y2="425" stroke="#2E2E35" strokeWidth="0.4" opacity="0.4" />
             </g>
           ))}
-
-          {/* Symmetry annotation */}
-          <text x="400" y="45" textAnchor="middle" fill="#2A2A2E" fontSize="8" fontFamily="'Roboto Mono', monospace" opacity="0.6">SYM</text>
         </g>
 
         {/* Nose direction label */}
-        <text x={cx} y={Math.max(18, cy - 270 * planeScale - 14)} textAnchor="middle" fill="#3A3A3E" fontSize="9" fontFamily="'Roboto Mono', monospace" letterSpacing="2" opacity="0.7">NOSE ↑</text>
+        <text x={ccx} y={ccy - halfLen - 0.6 * u} textAnchor="middle" fill="#4A4A52" fontSize={1.7 * u} fontFamily="'Roboto Mono', monospace" letterSpacing={0.3 * u} opacity="0.8">NOSE ↑</text>
 
         {/* Tire dots */}
         {model.tires.map(tire => (
           <TireDot
             key={tire.id}
             tire={tire}
-            pos={tireToSvg(cx, cy, fitScale, tire.position)}
+            pos={{ x: -tire.position[2], y: -tire.position[0] }}
             isSelected={selectedTireId === tire.id}
             isHovered={hoveredTireId === tire.id}
             radius={tireR}
+            u={u}
+            topBound={minCY}
             onSelect={handleSelect}
             onHover={setHoveredTireId}
           />
         ))}
 
         {/* Legend */}
-        <Legend x={viewW - 132} y={14} />
+        <Legend x={minCX + w - 21 * u} y={minCY + 1.5 * u} u={u} />
       </svg>
     </div>
   );
 }
 
-// ===== TireDot: memoized sub-component =====
+// ===== TireDot =====
 
 import type { TireData } from '@/types/aircraft';
 
@@ -216,13 +231,17 @@ interface TireDotProps {
   isSelected: boolean;
   isHovered: boolean;
   radius: number;
+  u: number;
+  topBound: number;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
 }
 
-function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }: TireDotProps) {
+function TireDot({ tire, pos, isSelected, isHovered, radius, u, topBound, onSelect, onHover }: TireDotProps) {
   const color = getStatusColor(tire.status);
-  const r = isSelected ? radius + 3 : isHovered ? radius + 2 : radius;
+  const r = isSelected ? radius + 0.45 * u : isHovered ? radius + 0.3 * u : radius;
+  // 空间不足时 tooltip 翻转到点的下方，避免被裁切
+  const tipY0 = pos.y - r - 7.2 * u < topBound ? pos.y + r + 3 * u : pos.y - r - 7.2 * u;
 
   return (
     <g
@@ -234,22 +253,22 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
       {/* Selection pulse ring - animated */}
       {isSelected && (
         <>
-          <circle cx={pos.x} cy={pos.y} r={r + 6} fill="none" stroke={color} strokeWidth="1.2" opacity="0.25">
-            <animate attributeName="r" values={`${r + 4};${r + 12};${r + 4}`} dur="2s" repeatCount="indefinite" />
+          <circle cx={pos.x} cy={pos.y} r={r + 0.9 * u} fill="none" stroke={color} strokeWidth={0.18 * u} opacity="0.25">
+            <animate attributeName="r" values={`${r + 0.6 * u};${r + 1.8 * u};${r + 0.6 * u}`} dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.35;0.1;0.35" dur="2s" repeatCount="indefinite" />
           </circle>
-          <circle cx={pos.x} cy={pos.y} r={r + 3} fill="none" stroke={color} strokeWidth="1.5" opacity="0.5" filter="url(#softGlow)" />
+          <circle cx={pos.x} cy={pos.y} r={r + 0.45 * u} fill="none" stroke={color} strokeWidth={0.22 * u} opacity="0.5" filter="url(#softGlow)" />
         </>
       )}
 
       {/* Hover ring */}
       {isHovered && !isSelected && (
-        <circle cx={pos.x} cy={pos.y} r={r + 5} fill="none" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.2" />
+        <circle cx={pos.x} cy={pos.y} r={r + 0.75 * u} fill="none" stroke="#FFFFFF" strokeWidth={0.12 * u} opacity="0.2" />
       )}
 
       {/* Status glow for warning/critical */}
       {(tire.status === 'warning' || tire.status === 'critical') && !isSelected && (
-        <circle cx={pos.x} cy={pos.y} r={r + 4} fill="none" stroke={color} strokeWidth="1" opacity="0.15" filter="url(#softGlow)">
+        <circle cx={pos.x} cy={pos.y} r={r + 0.6 * u} fill="none" stroke={color} strokeWidth={0.15 * u} opacity="0.15" filter="url(#softGlow)">
           <animate attributeName="opacity" values="0.1;0.25;0.1" dur="2.5s" repeatCount="indefinite" />
         </circle>
       )}
@@ -261,7 +280,7 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
         r={r}
         fill={isSelected ? color : '#141418'}
         stroke={isSelected ? '#FFFFFF' : color}
-        strokeWidth={isSelected ? 2.2 : 1.8}
+        strokeWidth={isSelected ? 0.32 * u : 0.26 * u}
         filter={isSelected ? 'url(#glow)' : undefined}
       />
 
@@ -277,10 +296,10 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
       {/* Label */}
       <text
         x={pos.x}
-        y={pos.y + r + 15}
+        y={pos.y + r + 2.2 * u}
         textAnchor="middle"
-        fill={isSelected ? '#FFFFFF' : isHovered ? '#C8C8D0' : '#6A6A70'}
-        fontSize="9"
+        fill={isSelected ? '#FFFFFF' : isHovered ? '#C8C8D0' : '#8A8A92'}
+        fontSize={1.5 * u}
         fontFamily="'Roboto Mono', monospace"
         fontWeight={isSelected ? 'bold' : 'normal'}
         style={{ pointerEvents: 'none' }}
@@ -292,21 +311,21 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
       {isHovered && (
         <g style={{ pointerEvents: 'none' }}>
           <rect
-            x={pos.x - 58}
-            y={pos.y - r - 52}
-            width="116"
-            height="38"
-            rx="6"
+            x={pos.x - 8 * u}
+            y={tipY0}
+            width={16 * u}
+            height={5.4 * u}
+            rx={0.8 * u}
             fill="rgba(14, 14, 18, 0.92)"
             stroke="#2A2A2E"
-            strokeWidth="1"
+            strokeWidth={0.14 * u}
           />
           <text
             x={pos.x}
-            y={pos.y - r - 35}
+            y={tipY0 + 2.4 * u}
             textAnchor="middle"
             fill={color}
-            fontSize="10"
+            fontSize={1.6 * u}
             fontFamily="sans-serif"
             fontWeight="bold"
           >
@@ -314,10 +333,10 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
           </text>
           <text
             x={pos.x}
-            y={pos.y - r - 21}
+            y={tipY0 + 4.8 * u}
             textAnchor="middle"
             fill="#8A8A93"
-            fontSize="8.5"
+            fontSize={1.3 * u}
             fontFamily="sans-serif"
           >
             {(tire.damageCount ?? 0) > 0 ? `${tire.damageCount}处损伤 · ${tire.label}` : `正常 · ${tire.label}`}
@@ -330,28 +349,28 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
 
 // ===== Legend =====
 
-function Legend({ x, y }: { x: number; y: number }) {
+function Legend({ x, y, u }: { x: number; y: number; u: number }) {
   const items = [
-    { cx: 16, cy: 34, label: '正常', color: '#00D2FF' },
-    { cx: 68, cy: 34, label: '预警', color: '#FFD60A' },
-    { cx: 16, cy: 58, label: '严重', color: '#FF3B30' },
-    { cx: 68, cy: 58, label: '选中', color: '#00D2FF', selected: true },
+    { cx: 2.4, cy: 4.7, label: '正常', color: '#00D2FF' },
+    { cx: 10.2, cy: 4.7, label: '预警', color: '#FFD60A' },
+    { cx: 2.4, cy: 8.3, label: '严重', color: '#FF3B30' },
+    { cx: 10.2, cy: 8.3, label: '选中', color: '#00D2FF', selected: true },
   ];
 
   return (
-    <g transform={`translate(${x}, ${y})`}>
-      <rect x="0" y="0" width="120" height="78" rx="8" fill="rgba(14, 14, 18, 0.9)" stroke="#2A2A2E" strokeWidth="1" />
-      <text x="12" y="18" fill="#C8C8D0" fontSize="10" fontFamily="sans-serif" fontWeight="600" letterSpacing="0.5">图例</text>
+    <g transform={`translate(${x}, ${y}) scale(${u})`}>
+      <rect x="0" y="0" width="19" height="11" rx="1.2" fill="rgba(14, 14, 18, 0.9)" stroke="#2A2A2E" strokeWidth="0.15" />
+      <text x="1.8" y="2.6" fill="#C8C8D0" fontSize="1.6" fontFamily="sans-serif" fontWeight="600" letterSpacing="0.1">图例</text>
       {items.map(item => (
         <g key={item.label}>
-          <circle cx={item.cx} cy={item.cy} r="5" fill="#141418" stroke={item.color} strokeWidth={item.selected ? 2 : 1.6} />
+          <circle cx={item.cx} cy={item.cy} r="0.8" fill="#141418" stroke={item.color} strokeWidth={item.selected ? 0.3 : 0.24} />
           {item.selected && (
-            <circle cx={item.cx} cy={item.cy} r="9" fill="none" stroke={item.color} strokeWidth="0.8" opacity="0.3">
-              <animate attributeName="r" values="8;10;8" dur="2s" repeatCount="indefinite" />
+            <circle cx={item.cx} cy={item.cy} r="1.4" fill="none" stroke={item.color} strokeWidth="0.12" opacity="0.3">
+              <animate attributeName="r" values="1.3;1.6;1.3" dur="2s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite" />
             </circle>
           )}
-          <text x={item.cx + (item.selected ? 14 : 12)} y={item.cy + 3} fill="#8A8A93" fontSize="9" fontFamily="sans-serif">{item.label}</text>
+          <text x={item.cx + (item.selected ? 2.1 : 1.8)} y={item.cy + 0.5} fill="#8A8A93" fontSize="1.4" fontFamily="sans-serif">{item.label}</text>
         </g>
       ))}
     </g>
