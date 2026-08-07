@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { aircraftModels } from '@/data/aircraftData';
 import { departureOptions, runwayOptions } from '@/data/recordData';
-import { woundTypeOptions, woundPositionOptions, severityOptions, SEVERITY_STYLE } from '@/data/woundMeta';
+import { WOUND_TYPE_OPTIONS, WOUND_POSITION_OPTIONS, SEVERITY_OPTIONS, SEVERITY_STYLE } from '@/data/woundMeta';
 import type { FlightRecord, TireWound } from '@/types/record';
 
 interface Props {
@@ -29,7 +29,7 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
   const [date, setDate] = useState('');
   const [departure, setDeparture] = useState('');
   const [landingRunway, setLandingRunway] = useState('');
-  const [modelId, setModelId] = useState('A320');
+  const [modelId, setModelId] = useState('a320');
   const [aircraftNo, setAircraftNo] = useState('');
 
   // --- Wound list ---
@@ -45,7 +45,7 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
 
   const resetAll = useCallback(() => {
     setDate(''); setDeparture(''); setLandingRunway('');
-    setModelId('A320'); setAircraftNo(''); setWounds([]);
+    setModelId('a320'); setAircraftNo(''); setWounds([]);
     setDraft({ tireId: '', size: '', type: 'cut', position: 'tread', severity: 'low', description: '' });
   }, []);
 
@@ -57,7 +57,7 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
     if (!draft.tireId || !draft.size) return;
     setWounds(prev => [...prev, {
       ...draft,
-      description: draft.description || woundTypeOptions.find(o => o.value === draft.type)?.label || '',
+      description: draft.description || WOUND_TYPE_OPTIONS.find(o => o.value === draft.type)?.label || '',
     }]);
     setDraft({ tireId: '', size: '', type: 'cut', position: 'tread', severity: 'low', description: '' });
   }, [draft]);
@@ -158,10 +158,10 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
                     <div key={i} className="flex items-center gap-2 p-2 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
                       <span className="text-xs font-bold font-mono" style={{ color: '#00D2FF' }}>{w.tireId}</span>
                       <span className="text-xs" style={{ color: '#C8C8CD' }}>{w.size}</span>
-                      <MiniPill label={woundTypeOptions.find(o => o.value === w.type)?.label ?? w.type} />
-                      <MiniPill label={woundPositionOptions.find(o => o.value === w.position)?.label ?? w.position} />
+                      <MiniPill label={WOUND_TYPE_OPTIONS.find(o => o.value === w.type)?.label ?? w.type} />
+                      <MiniPill label={WOUND_POSITION_OPTIONS.find(o => o.value === w.position)?.label ?? w.position} />
                       <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: sev.bg, color: sev.color }}>
-                        {severityOptions.find(o => o.value === w.severity)?.label ?? w.severity}
+                        {SEVERITY_OPTIONS.find(o => o.value === w.severity)?.label ?? w.severity}
                       </span>
                       <span className="text-[10px] flex-1 truncate" style={{ color: '#8A8A93' }}>{w.description}</span>
                       <button type="button" onClick={() => removeWound(i)}
@@ -198,9 +198,9 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
                 <input type="text" value={draft.size} onChange={e => updateDraft({ size: e.target.value })}
                   placeholder="尺寸" className="w-full px-2 py-2 rounded border text-xs outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
                   style={inputStyle} />
-                <Select value={draft.type} onChange={v => updateDraft({ type: v as TireWound['type'] })} options={woundTypeOptions} />
-                <Select value={draft.position} onChange={v => updateDraft({ position: v as TireWound['position'] })} options={woundPositionOptions} />
-                <Select value={draft.severity} onChange={v => updateDraft({ severity: v as TireWound['severity'] })} options={severityOptions} />
+                <Select value={draft.type} onChange={v => updateDraft({ type: v as TireWound['type'] })} options={WOUND_TYPE_OPTIONS} />
+                <Select value={draft.position} onChange={v => updateDraft({ position: v as TireWound['position'] })} options={WOUND_POSITION_OPTIONS} />
+                <Select value={draft.severity} onChange={v => updateDraft({ severity: v as TireWound['severity'] })} options={SEVERITY_OPTIONS} />
               </div>
 
               <input type="text" value={draft.description} onChange={e => updateDraft({ description: e.target.value })}

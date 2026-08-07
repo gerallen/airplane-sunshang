@@ -172,7 +172,7 @@ export function generateDamageHistory(modelId: string, tireId: string): DamageRe
 
 // ========== 生成月度统计 ==========
 
-export function generateMonthlyStats(modelId: string): MonthlyStats[] {
+export function generateMonthlyStats(_modelId: string): MonthlyStats[] {
   const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
   return months.map((month) => ({
     month,
