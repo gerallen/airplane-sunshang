@@ -1,8 +1,7 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { AppProvider } from '@/context/AppContext';
-import { PlaneView } from '@/components/plane-view/PlaneView';
-import { LeftPanel } from '@/components/ui/LeftPanel';
+import { TireTable } from '@/components/tire-table/TireTable';
 import { RightPanel } from '@/components/ui/RightPanel';
 import type { FlightRecord } from '@/types/record';
 
@@ -42,24 +41,13 @@ function DetailContent() {
         返回列表
       </button>
 
-      {/* Left Panel */}
-      <div className="flex-shrink-0" style={{ width: 320, zIndex: 10 }}>
-        <LeftPanel />
-      </div>
-
-      {/* Center - Plane View */}
-      <div className="flex-1 relative">
-        <PlaneView />
+      {/* Center - Tire Table */}
+      <div className="flex-1 relative min-w-0">
+        <TireTable record={record} />
       </div>
 
       {/* Right Panel - shows record detail */}
       <RightPanel record={record} />
-
-      {/* Bottom hint */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full border pointer-events-none"
-        style={{ backgroundColor: 'rgba(14,14,18,0.9)', borderColor: '#1E1E22', color: '#5A5A60', fontSize: '12px', zIndex: 5, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-        点击机轮查看详细损伤报告
-      </div>
     </div>
   );
 }
@@ -68,7 +56,7 @@ export default function DetailPage() {
   const { modelId } = useParams<{ modelId: string }>();
 
   return (
-    <AppProvider initialModelId={(modelId || 'a320').toLowerCase()}>
+    <AppProvider initialModelId={(modelId || 'b737').toLowerCase()}>
       <DetailContent />
     </AppProvider>
   );

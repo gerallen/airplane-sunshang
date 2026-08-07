@@ -10,7 +10,7 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-export function AppProvider({ children, initialModelId = 'A320' }: { children: ReactNode; initialModelId?: string }) {
+export function AppProvider({ children, initialModelId = 'b737' }: { children: ReactNode; initialModelId?: string }) {
   const [selectedModelId, setSelectedModelId] = useState(initialModelId);
   const [selectedTireId, setSelectedTireId] = useState<string | null>(null);
 

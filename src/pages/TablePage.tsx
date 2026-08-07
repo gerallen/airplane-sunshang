@@ -6,7 +6,7 @@ import { getStatusColor, getStatusText } from '@/data/aircraftData';
 import { AddRecordDialog } from '@/components/ui/AddRecordDialog';
 import type { FlightRecord } from '@/types/record';
 
-type SortKey = 'date' | 'departure' | 'modelName' | 'aircraftNo';
+type SortKey = 'date' | 'modelName' | 'aircraftNo';
 type SortDir = 'asc' | 'desc';
 
 export default function TablePage() {
@@ -23,7 +23,6 @@ export default function TablePage() {
     if (q) {
       data = data.filter(r =>
         r.date.includes(q) ||
-        r.departure.toLowerCase().includes(q) ||
         r.modelName.toLowerCase().includes(q) ||
         r.aircraftNo.toLowerCase().includes(q)
       );
@@ -88,7 +87,7 @@ export default function TablePage() {
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#5A5A60' }} />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="搜索日期 / 起飞地 / 机型 / 飞机编号..."
+              placeholder="搜索日期 / 机型 / 飞机编号..."
               className="w-full pl-9 pr-4 py-2.5 rounded-lg border text-sm outline-none transition-all"
               style={{ backgroundColor: '#111114', borderColor: '#1E1E22', color: '#FFFFFF' }}
               onFocus={e => (e.currentTarget.style.borderColor = '#00D2FF')}
@@ -103,14 +102,14 @@ export default function TablePage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10" style={{ backgroundColor: '#111114' }}>
               <tr style={{ borderBottom: '1px solid #1E1E22' }}>
-                {(['date', 'departure', 'modelName', 'aircraftNo'] as [SortKey, SortKey, SortKey, SortKey]).map(key => (
+                {(['date', 'modelName', 'aircraftNo'] as [SortKey, SortKey, SortKey]).map(key => (
                   <th key={key} onClick={() => handleSort(key)}
                     className="text-left px-4 py-3 font-medium cursor-pointer select-none transition-colors"
                     style={{ color: '#6A6A70' }}
                     onMouseEnter={e => (e.currentTarget.style.color = '#00D2FF')}
                     onMouseLeave={e => (e.currentTarget.style.color = '#6A6A70')}
                   >
-                    {{ date: '日期', departure: '起飞地', modelName: '机型', aircraftNo: '飞机编号' }[key]}
+                    {{ date: '日期', modelName: '机型', aircraftNo: '飞机编号' }[key]}
                     <SortIcon col={key} />
                   </th>
                 ))}
@@ -130,7 +129,6 @@ export default function TablePage() {
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <td className="px-4 py-3" style={{ color: '#FFFFFF' }}>{record.date}</td>
-                    <td className="px-4 py-3" style={{ color: '#8A8A93' }}>{record.departure}</td>
                     <td className="px-4 py-3" style={{ color: '#8A8A93' }}>{record.modelName}</td>
                     <td className="px-4 py-3 font-mono" style={{ color: '#00D2FF' }}>{record.aircraftNo}</td>
                     <td className="px-4 py-3">
