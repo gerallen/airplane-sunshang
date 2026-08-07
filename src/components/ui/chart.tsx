@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
+import { Tooltip, Legend } from "recharts"
 
 import { cn } from "@/lib/utils"
 
@@ -96,7 +96,7 @@ ${colorConfig
   )
 }
 
-const ChartTooltip = RechartsPrimitive.Tooltip
+const ChartTooltip = Tooltip
 
 function ChartTooltipContent({
   active,
@@ -112,7 +112,7 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
+}: React.ComponentProps<typeof Tooltip> &
   React.ComponentProps<"div"> & {
     hideLabel?: boolean
     hideIndicator?: boolean
@@ -239,7 +239,7 @@ function ChartTooltipContent({
   )
 }
 
-const ChartLegend = RechartsPrimitive.Legend
+const ChartLegend = Legend
 
 function ChartLegendContent({
   className,
@@ -248,7 +248,7 @@ function ChartLegendContent({
   verticalAlign = "bottom",
   nameKey,
 }: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+  Pick<React.ComponentProps<typeof Legend>, "payload" | "verticalAlign"> & {
     hideIcon?: boolean
     nameKey?: string
   }) {
