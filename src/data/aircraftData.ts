@@ -1,114 +1,191 @@
-import type { AircraftModel, DamageRecord, DamageStats, MonthlyStats } from "@/types"
+import type { AircraftModel, TireData, TireDamage, DamageStats, MonthlyStats } from "@/types"
 
-// ========== 5 种机型轮胎坐标与数据 ==========
-// 坐标系: x=前后(nose-to-tail), y=上下(vertical), z=左右(wingspan, 左正右负)
-// 编号规则: 面对飞机, 前起落架独立, 主起落架从右往左(按 z 降序)依次编号
+// ========== 波音系列机型数据 ==========
+// 编号规则: 前轮独立编号（左前、右前），主起落架依次编号 1号、2号……
+// 表格展示顺序 = tires 数组顺序
+
+// ---------- 确定性伪随机（避免每次渲染数据变化） ----------
+function hashSeed(str: string): number {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+function mulberry32(seed: number) {
+  let a = seed
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// ---------- 常量选项 ----------
+const DEPARTURES = [
+  '北京首都', '上海浦东', '广州白云', '深圳宝安', '成都天府',
+  '杭州萧山', '西安咸阳', '重庆江北', '武汉天河', '南京禄口',
+  '青岛胶东', '厦门高崎', '三亚凤凰', '拉萨贡嘎', '乌鲁木齐地窝堡',
+]
+const RUNWAYS = [
+  '跑道01L', '跑道01R', '跑道19L', '跑道19R',
+  '跑道36L', '跑道36R', '跑道18L', '跑道18R',
+]
+const AIRCRAFT_NOS: Record<string, string[]> = {
+  b737: ['B-5512', 'B-5405', 'B-5302', 'B-5689'],
+  b747: ['B-2445', 'B-2447', 'B-2472'],
+  b767: ['B-2559', 'B-2560', 'B-2493'],
+  b777: ['B-2020', 'B-2048', 'B-2099', 'B-2031'],
+}
+const DAMAGE_TYPES: TireDamage['type'][] = ['cut', 'puncture', 'wear', 'bulge', 'crack']
+const DAMAGE_POSITIONS: TireDamage['position'][] = ['tread', 'sidewall', 'shoulder', 'bead']
+const TYPE_DESC: Record<string, string> = {
+  cut: '划伤', puncture: '扎伤', wear: '磨损', bulge: '鼓包', crack: '裂纹',
+}
+const POS_DESC: Record<string, string> = {
+  tread: '胎冠', sidewall: '胎侧', shoulder: '胎肩', bead: '胎圈',
+}
+
+// ---------- 生成单个轮胎的历史损伤 ----------
+function generateTireHistory(modelId: string, rand: () => number): TireDamage[] {
+  const now = new Date()
+  const count = Math.floor(rand() * 7) // 0~6 次
+  const events: TireDamage[] = []
+
+  for (let i = 0; i < count; i++) {
+    const daysAgo = Math.floor(rand() * 360) + 3 // 3~363 天前
+    const date = new Date(now)
+    date.setDate(date.getDate() - daysAgo)
+
+    const type = DAMAGE_TYPES[Math.floor(rand() * DAMAGE_TYPES.length)]
+    const position = DAMAGE_POSITIONS[Math.floor(rand() * DAMAGE_POSITIONS.length)]
+    const severityRoll = rand()
+    const severity: TireDamage['severity'] = severityRoll > 0.75 ? 'high' : severityRoll > 0.4 ? 'medium' : 'low'
+
+    const departures = DEPARTURES
+    const nos = AIRCRAFT_NOS[modelId] ?? ['B-0000']
+    const departure = departures[Math.floor(rand() * departures.length)]
+    const runway = RUNWAYS[Math.floor(rand() * RUNWAYS.length)]
+    const aircraftNo = nos[Math.floor(rand() * nos.length)]
+
+    const size = type === 'puncture'
+      ? `${3 + Math.floor(rand() * 10)}mm深`
+      : `${8 + Math.floor(rand() * 40)}x${1 + Math.floor(rand() * 8)}mm`
+
+    events.push({
+      date: date.toISOString().split('T')[0],
+      type,
+      position,
+      severity,
+      size,
+      description: `${POS_DESC[position]}${TYPE_DESC[type]}，${departure}起飞航班降落后检查发现`,
+      departure,
+      runway,
+      aircraftNo,
+    })
+  }
+
+  return events.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// ---------- 由历史推导轮胎状态与月度统计 ----------
+function buildTire(modelId: string, id: string, label: string): TireData {
+  const rand = mulberry32(hashSeed(`${modelId}::${id}`))
+  const history = generateTireHistory(modelId, rand)
+  const now = new Date()
+
+  // 月度统计（最近12个月）
+  const monthlyStats = new Array(12).fill(0)
+  for (const e of history) {
+    const d = new Date(e.date)
+    const monthDiff = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth())
+    if (monthDiff >= 0 && monthDiff < 12) monthlyStats[11 - monthDiff]++
+  }
+
+  // 状态推导
+  let status: TireData['status'] = 'normal'
+  const latest = history[0]
+  if (latest) {
+    const daysSince = Math.floor((now.getTime() - new Date(latest.date).getTime()) / 86400000)
+    if (latest.severity === 'high' && daysSince <= 45) status = 'critical'
+    else if (daysSince <= 45 || history.length >= 5) status = 'warning'
+  }
+  if (history.length >= 6) status = 'critical'
+
+  return {
+    id,
+    label,
+    position: [0, 0, 0], // 图表化展示不再需要 3D 坐标
+    status,
+    damageCount: history.length,
+    lastInspect: now.toISOString().split('T')[0],
+    damageHistory: history,
+    monthlyStats,
+  }
+}
+
+function buildTires(modelId: string, mainCount: number, mainLabel: (n: number) => string): TireData[] {
+  const tires: TireData[] = [
+    buildTire(modelId, '左前', '前起落架-左'),
+    buildTire(modelId, '右前', '前起落架-右'),
+  ]
+  for (let i = 1; i <= mainCount; i++) {
+    tires.push(buildTire(modelId, `${i}号`, mainLabel(i)))
+  }
+  return tires
+}
+
+// 主轮位置描述：奇数左侧、偶数右侧，由内向外
+function sideLabel(n: number, perSide: number): string {
+  const side = n % 2 === 1 ? '左' : '右'
+  const idx = Math.ceil(n / 2)
+  return `主起落架-${side}${idx}/${perSide}`
+}
+
+// ========== 4 种波音机型 ==========
+// B737: 2 前轮 + 4 主轮（每侧 2）
+// B767: 2 前轮 + 8 主轮（每侧 4）
+// B777: 2 前轮 + 12 主轮（每侧 6）
+// B747: 2 前轮 + 16 主轮（翼下 8 + 机身下 8）
 
 export const aircraftModels: AircraftModel[] = [
   {
-    id: "a320",
-    name: "空客 A320",
-    manufacturer: "空客",
-    type: "窄体客机",
+    id: 'b737',
+    name: 'B737',
+    manufacturer: '波音',
+    type: '窄体客机',
     tireCount: 6,
-    tires: [
-      // 前起落架 (独立编号, nose gear)
-      { id: "ng",  position: [14.0, 0, 0],   status: "normal", label: "前轮" },
-      // 主起落架: 面对飞机从右往左 (z 降序)
-      { id: "m1", position: [4.0, 0, 3.5],  status: "normal", label: "1号" },
-      { id: "m2", position: [4.0, 0, -3.5], status: "warning", label: "2号" },
-      { id: "m3", position: [-2.0, 0, 3.5], status: "normal", label: "3号" },
-      { id: "m4", position: [-2.0, 0, -3.5], status: "critical", label: "4号" },
-      { id: "m5", position: [-6.0, 0, 0],    status: "normal", label: "5号" },
-    ],
+    tires: buildTires('b737', 4, (n) => sideLabel(n, 2)),
   },
   {
-    id: "b737",
-    name: "波音 B737",
-    manufacturer: "波音",
-    type: "窄体客机",
-    tireCount: 6,
-    tires: [
-      { id: "ng",  position: [13.5, 0, 0],   status: "normal", label: "前轮" },
-      { id: "m1", position: [3.5, 0, 3.2],  status: "normal", label: "1号" },
-      { id: "m2", position: [3.5, 0, -3.2], status: "warning", label: "2号" },
-      { id: "m3", position: [-1.5, 0, 3.2], status: "normal", label: "3号" },
-      { id: "m4", position: [-1.5, 0, -3.2], status: "normal", label: "4号" },
-      { id: "m5", position: [-5.5, 0, 0],    status: "normal", label: "5号" },
-    ],
+    id: 'b747',
+    name: 'B747',
+    manufacturer: '波音',
+    type: '宽体客机',
+    tireCount: 18,
+    tires: buildTires('b747', 16, (n) => {
+      if (n <= 8) return `翼下起落架-${n % 2 === 1 ? '左' : '右'}${Math.ceil(n / 2)}/4`
+      return `机身起落架-${n % 2 === 1 ? '左' : '右'}${Math.ceil((n - 8) / 2)}/4`
+    }),
   },
   {
-    id: "a330",
-    name: "空客 A330",
-    manufacturer: "空客",
-    type: "宽体客机",
+    id: 'b767',
+    name: 'B767',
+    manufacturer: '波音',
+    type: '宽体客机',
     tireCount: 10,
-    tires: [
-      { id: "ng",  position: [18.0, 0, 0],    status: "normal", label: "前轮" },
-      { id: "m1", position: [6.0, 0, 5.5],   status: "normal", label: "1号" },
-      { id: "m2", position: [6.0, 0, -5.5],  status: "normal", label: "2号" },
-      { id: "m3", position: [2.0, 0, 5.5],   status: "warning", label: "3号" },
-      { id: "m4", position: [2.0, 0, -5.5],  status: "normal", label: "4号" },
-      { id: "m5", position: [-2.0, 0, 5.5],  status: "normal", label: "5号" },
-      { id: "m6", position: [-2.0, 0, -5.5], status: "critical", label: "6号" },
-      { id: "m7", position: [-6.0, 0, 5.5],  status: "normal", label: "7号" },
-      { id: "m8", position: [-6.0, 0, -5.5], status: "normal", label: "8号" },
-      { id: "m9", position: [-10.0, 0, 0],  status: "normal", label: "9号" },
-    ],
+    tires: buildTires('b767', 8, (n) => sideLabel(n, 4)),
   },
   {
-    id: "b777",
-    name: "波音 B777",
-    manufacturer: "波音",
-    type: "宽体客机",
+    id: 'b777',
+    name: 'B777',
+    manufacturer: '波音',
+    type: '宽体客机',
     tireCount: 14,
-    tires: [
-      { id: "ng",  position: [22.0, 0, 0],    status: "normal", label: "前轮" },
-      { id: "m1", position: [8.0, 0, 6.5],   status: "normal", label: "1号" },
-      { id: "m2", position: [8.0, 0, -6.5],  status: "normal", label: "2号" },
-      { id: "m3", position: [4.0, 0, 6.5],   status: "warning", label: "3号" },
-      { id: "m4", position: [4.0, 0, -6.5],  status: "normal", label: "4号" },
-      { id: "m5", position: [0.0, 0, 6.5],    status: "normal", label: "5号" },
-      { id: "m6", position: [0.0, 0, -6.5],   status: "critical", label: "6号" },
-      { id: "m7", position: [-4.0, 0, 6.5],  status: "normal", label: "7号" },
-      { id: "m8", position: [-4.0, 0, -6.5], status: "normal", label: "8号" },
-      { id: "m9", position: [-8.0, 0, 6.5],  status: "warning", label: "9号" },
-      { id: "m10", position: [-8.0, 0, -6.5], status: "normal", label: "10号" },
-      { id: "m11", position: [-12.0, 0, 6.5], status: "normal", label: "11号" },
-      { id: "m12", position: [-12.0, 0, -6.5], status: "normal", label: "12号" },
-      { id: "m13", position: [-16.0, 0, 0],   status: "normal", label: "13号" },
-    ],
-  },
-  {
-    id: "a380",
-    name: "空客 A380",
-    manufacturer: "空客",
-    type: "超大型客机",
-    tireCount: 22,
-    tires: [
-      { id: "ng",  position: [28.0, 0, 0],    status: "normal", label: "前轮" },
-      { id: "m1", position: [12.0, 0, 8.0],   status: "normal", label: "1号" },
-      { id: "m2", position: [12.0, 0, -8.0],  status: "normal", label: "2号" },
-      { id: "m3", position: [8.0, 0, 8.0],    status: "warning", label: "3号" },
-      { id: "m4", position: [8.0, 0, -8.0],   status: "normal", label: "4号" },
-      { id: "m5", position: [4.0, 0, 8.0],    status: "normal", label: "5号" },
-      { id: "m6", position: [4.0, 0, -8.0],   status: "critical", label: "6号" },
-      { id: "m7", position: [0.0, 0, 8.0],    status: "normal", label: "7号" },
-      { id: "m8", position: [0.0, 0, -8.0],   status: "normal", label: "8号" },
-      { id: "m9", position: [-4.0, 0, 8.0],   status: "warning", label: "9号" },
-      { id: "m10", position: [-4.0, 0, -8.0],  status: "normal", label: "10号" },
-      { id: "m11", position: [-8.0, 0, 8.0],   status: "normal", label: "11号" },
-      { id: "m12", position: [-8.0, 0, -8.0],  status: "normal", label: "12号" },
-      { id: "m13", position: [-12.0, 0, 8.0],  status: "warning", label: "13号" },
-      { id: "m14", position: [-12.0, 0, -8.0], status: "normal", label: "14号" },
-      { id: "m15", position: [-16.0, 0, 8.0],  status: "normal", label: "15号" },
-      { id: "m16", position: [-16.0, 0, -8.0], status: "normal", label: "16号" },
-      { id: "m17", position: [-20.0, 0, 8.0],  status: "normal", label: "17号" },
-      { id: "m18", position: [-20.0, 0, -8.0], status: "normal", label: "18号" },
-      { id: "m19", position: [-24.0, 0, 4.0],  status: "normal", label: "19号" },
-      { id: "m20", position: [-24.0, 0, -4.0], status: "normal", label: "20号" },
-      { id: "m21", position: [-28.0, 0, 0],    status: "normal", label: "21号" },
-    ],
+    tires: buildTires('b777', 12, (n) => sideLabel(n, 6)),
   },
 ]
 
@@ -116,72 +193,30 @@ export const aircraftModels: AircraftModel[] = [
 
 export function getStatusColor(status: string): string {
   switch (status) {
-    case "normal": return "#00D2FF"
-    case "warning": return "#FFD60A"
-    case "critical": return "#FF3B30"
-    default: return "#00D2FF"
+    case 'normal': return '#00D2FF'
+    case 'warning': return '#FFD60A'
+    case 'critical': return '#FF3B30'
+    default: return '#00D2FF'
   }
 }
 
 export function getStatusText(status: string): string {
   switch (status) {
-    case "normal": return "正常"
-    case "warning": return "警告"
-    case "critical": return "严重"
-    default: return "正常"
+    case 'normal': return '正常'
+    case 'warning': return '预警'
+    case 'critical': return '严重'
+    default: return '正常'
   }
 }
 
-// ========== 生成模拟损伤历史 ==========
-
-export function generateDamageHistory(modelId: string, tireId: string): DamageRecord[] {
-  const baseDate = new Date("2024-01-15")
-  const records: DamageRecord[] = []
-  const count = 3 + Math.floor(Math.random() * 5)
-
-  const types = ["割伤", "磨损", "扎伤", "裂纹", "鼓包", "过热"]
-  const positions = ["胎面", "胎侧", "胎肩", "胎圈"]
-  const severities = ["轻微", "中等", "严重"]
-  const runways = ["跑道A", "跑道B", "跑道C"]
-  const departures = ["北京", "上海", "广州", "深圳", "成都"]
-
-  for (let i = 0; i < count; i++) {
-    const date = new Date(baseDate)
-    date.setDate(date.getDate() + i * 45 + Math.floor(Math.random() * 15))
-
-    records.push({
-      id: `${modelId}-${tireId}-${i}`,
-      tireId,
-      modelId,
-      date: date.toISOString().split("T")[0],
-      type: types[Math.floor(Math.random() * types.length)],
-      position: positions[Math.floor(Math.random() * positions.length)],
-      severity: severities[Math.floor(Math.random() * severities.length)] as "轻微" | "中等" | "严重",
-      description: `轮胎${tireId}发现${types[Math.floor(Math.random() * types.length)]}，需定期检查。`,
-      runway: runways[Math.floor(Math.random() * runways.length)],
-      departure: departures[Math.floor(Math.random() * departures.length)],
-      recommendation:
-        Math.random() > 0.5
-          ? "建议下次维护时更换"
-          : "建议继续使用并加强监控",
-    })
-  }
-
-  return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+/** 距今多少天 */
+export function daysSince(dateStr: string): number {
+  const now = new Date()
+  const d = new Date(dateStr)
+  return Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000))
 }
 
-// ========== 生成月度统计 ==========
-
-export function generateMonthlyStats(_modelId: string): MonthlyStats[] {
-  const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
-  return months.map((month) => ({
-    month,
-    damageCount: Math.floor(Math.random() * 8),
-    severity: ["轻微", "中等", "严重"][Math.floor(Math.random() * 3)] as "轻微" | "中等" | "严重",
-  }))
-}
-
-// ========== 生成损伤概览统计 ==========
+// ========== 损伤概览统计 ==========
 
 export function generateDamageStats(modelId: string): DamageStats {
   const model = aircraftModels.find((m) => m.id === modelId)
@@ -189,25 +224,34 @@ export function generateDamageStats(modelId: string): DamageStats {
     return { total: 0, normal: 0, warning: 0, critical: 0, byType: {} }
   }
 
-  const stats: DamageStats = {
-    total: 0,
-    normal: 0,
-    warning: 0,
-    critical: 0,
-    byType: {},
-  }
+  const stats: DamageStats = { total: 0, normal: 0, warning: 0, critical: 0, byType: {} }
 
   model.tires.forEach((tire) => {
-    if (tire.status === "normal") stats.normal++
-    else if (tire.status === "warning") stats.warning++
-    else if (tire.status === "critical") stats.critical++
+    if (tire.status === 'normal') stats.normal++
+    else if (tire.status === 'warning') stats.warning++
+    else if (tire.status === 'critical') stats.critical++
 
-    const history = generateDamageHistory(modelId, tire.id)
-    history.forEach((record) => {
+    ;(tire.damageHistory ?? []).forEach((record) => {
       stats.total++
       stats.byType[record.type] = (stats.byType[record.type] || 0) + 1
     })
   })
 
   return stats
+}
+
+// ========== 兼容旧接口（月度统计） ==========
+
+export function generateMonthlyStats(modelId: string): MonthlyStats[] {
+  const model = aircraftModels.find((m) => m.id === modelId)
+  const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+  const totals = new Array(12).fill(0)
+  model?.tires.forEach((t) => {
+    ;(t.monthlyStats ?? []).forEach((c, i) => { totals[i] += c })
+  })
+  return months.map((month, i) => ({
+    month,
+    damageCount: totals[i],
+    severity: (totals[i] > 4 ? '严重' : totals[i] > 1 ? '中等' : '轻微') as '轻微' | '中等' | '严重',
+  }))
 }

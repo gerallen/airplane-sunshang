@@ -5,6 +5,10 @@ export interface TireDamage {
   severity: 'low' | 'medium' | 'high';
   size: string;
   description: string;
+  /** 损伤当次航班信息（用于归因分析） */
+  departure?: string;
+  runway?: string;
+  aircraftNo?: string;
 }
 
 export interface DamageStats {
