@@ -317,7 +317,7 @@ function TireDot({ tire, pos, isSelected, isHovered, radius, onSelect, onHover }
             fontSize="8.5"
             fontFamily="sans-serif"
           >
-            {tire.damageCount > 0 ? `${tire.damageCount}处损伤 · ${tire.label}` : `正常 · ${tire.label}`}
+            {(tire.damageCount ?? 0) > 0 ? `${tire.damageCount}处损伤 · ${tire.label}` : `正常 · ${tire.label}`}
           </text>
         </g>
       )}
