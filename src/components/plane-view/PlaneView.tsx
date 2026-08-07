@@ -18,20 +18,23 @@ export function PlaneView() {
   const cx = viewW / 2;
   const cy = viewH / 2 - 20;
 
-  // Fit scale based on tire spread
-  const fitScale = useMemo(() => {
+  // 机轮坐标≈实际米数：翼展≈主轮外側z×10.5，机身长≈翼展×(540/510)
+  // 飞机图形与轮胎点共用同一坐标尺度，保证轮胎落在机体对应位置
+  const { fitScale, planeScale } = useMemo(() => {
     const zs = model.tires.map(t => Math.abs(t.position[2]));
-    const xs = model.tires.map(t => Math.abs(t.position[0]));
-    const maxSpan = Math.max(...zs) * 2;
-    const maxLen  = Math.max(...xs) * 2;
-    return Math.min(
-      (viewW - 180) / Math.max(maxSpan, 6),
-      (viewH - 100) / Math.max(maxLen, 12)
+    const xs = model.tires.map(t => t.position[0]);
+    const maxZ = Math.max(...zs, 1);
+    const spreadX = Math.max(...xs) - Math.min(...xs);
+    const spanUnits = Math.max(maxZ * 10.5, 20);                 // 翼展（机轮坐标单位）
+    const lenUnits = Math.max(spanUnits * (540 / 510), spreadX * 1.5, 20); // 机身长
+    const fit = Math.min(
+      (viewW - 180) / spanUnits,
+      (viewH - 100) / lenUnits
     );
+    return { fitScale: fit, planeScale: (spanUnits * fit) / 510 };
   }, [model]);
 
   const tireR = Math.max(6, Math.min(10, fitScale * 2));
-  const planeScale = fitScale / 55;
 
   const handleSelect = useCallback((id: string) => {
     setSelectedTireId(selectedTireId === id ? null : id);
@@ -77,7 +80,7 @@ export function PlaneView() {
         <rect width={viewW} height={viewH} fill="url(#grid)" />
 
         {/* Center crosshair - subtle */}
-        <g stroke="#1A1A1D" strokeWidth="0.8">
+        <g stroke="#2A2A30" strokeWidth="0.8">
           <line x1={cx - 14} y1={cy} x2={cx + 14} y2={cy} />
           <line x1={cx} y1={cy - 14} x2={cx} y2={cy + 14} />
         </g>
@@ -89,7 +92,7 @@ export function PlaneView() {
           <path
             d="M400,60 C425,70 432,90 435,115 L440,185 L442,285 L442,365 L440,455 C435,495 430,525 425,545 L420,555 L510,570 L505,585 L400,600 L295,585 L290,570 L380,555 L375,545 C370,525 365,495 360,455 L358,365 L358,285 L360,185 L365,115 C368,90 375,70 400,60 Z"
             fill="url(#fuselageGrad)"
-            stroke="#252528"
+            stroke="#3A3A42"
             strokeWidth="1.2"
             opacity="0.92"
           />
@@ -98,7 +101,7 @@ export function PlaneView() {
           <path
             d="M358,365 L155,400 L145,420 L160,440 L358,415 Z"
             fill="url(#wingGrad)"
-            stroke="#252528"
+            stroke="#3A3A42"
             strokeWidth="1"
             opacity="0.88"
           />
@@ -107,24 +110,24 @@ export function PlaneView() {
           <path
             d="M442,365 L645,400 L655,420 L640,440 L442,415 Z"
             fill="url(#wingGrad)"
-            stroke="#252528"
+            stroke="#3A3A42"
             strokeWidth="1"
             opacity="0.88"
           />
 
           {/* Left engine nacelle */}
-          <ellipse cx="218" cy="420" rx="38" ry="16" fill="#0E0E10" stroke="#252528" strokeWidth="0.8" opacity="0.85" />
-          <ellipse cx="218" cy="420" rx="28" ry="10" fill="none" stroke="#1E1E22" strokeWidth="0.6" opacity="0.6" />
+          <ellipse cx="218" cy="420" rx="38" ry="16" fill="#0E0E10" stroke="#3A3A42" strokeWidth="0.8" opacity="0.85" />
+          <ellipse cx="218" cy="420" rx="28" ry="10" fill="none" stroke="#2E2E35" strokeWidth="0.6" opacity="0.6" />
 
           {/* Right engine nacelle */}
-          <ellipse cx="582" cy="420" rx="38" ry="16" fill="#0E0E10" stroke="#252528" strokeWidth="0.8" opacity="0.85" />
-          <ellipse cx="582" cy="420" rx="28" ry="10" fill="none" stroke="#1E1E22" strokeWidth="0.6" opacity="0.6" />
+          <ellipse cx="582" cy="420" rx="38" ry="16" fill="#0E0E10" stroke="#3A3A42" strokeWidth="0.8" opacity="0.85" />
+          <ellipse cx="582" cy="420" rx="28" ry="10" fill="none" stroke="#2E2E35" strokeWidth="0.6" opacity="0.6" />
 
           {/* Horizontal stabilizer - left */}
           <path
             d="M380,555 L290,570 L295,585 L375,575 Z"
             fill="#0E0E10"
-            stroke="#252528"
+            stroke="#3A3A42"
             strokeWidth="0.8"
             opacity="0.8"
           />
@@ -133,7 +136,7 @@ export function PlaneView() {
           <path
             d="M420,555 L510,570 L505,585 L425,575 Z"
             fill="#0E0E10"
-            stroke="#252528"
+            stroke="#3A3A42"
             strokeWidth="0.8"
             opacity="0.8"
           />
@@ -142,7 +145,7 @@ export function PlaneView() {
           <path
             d="M394,515 L406,515 L402,595 L398,595 Z"
             fill="#0E0E10"
-            stroke="#252528"
+            stroke="#3A3A42"
             strokeWidth="0.8"
             opacity="0.8"
           />
@@ -150,28 +153,28 @@ export function PlaneView() {
           {/* ===== Blueprint detail lines ===== */}
 
           {/* Centerline - fuselage */}
-          <line x1="400" y1="60" x2="400" y2="600" stroke="#1A1A1D" strokeWidth="0.7" strokeDasharray="5,4" opacity="0.7" />
+          <line x1="400" y1="60" x2="400" y2="600" stroke="#2A2A30" strokeWidth="0.7" strokeDasharray="5,4" opacity="0.7" />
 
           {/* Wing centerlines */}
-          <line x1="145" y1="420" x2="358" y2="390" stroke="#1A1A1D" strokeWidth="0.5" strokeDasharray="4,3" opacity="0.4" />
-          <line x1="655" y1="420" x2="442" y2="390" stroke="#1A1A1D" strokeWidth="0.5" strokeDasharray="4,3" opacity="0.4" />
+          <line x1="145" y1="420" x2="358" y2="390" stroke="#2A2A30" strokeWidth="0.5" strokeDasharray="4,3" opacity="0.4" />
+          <line x1="655" y1="420" x2="442" y2="390" stroke="#2A2A30" strokeWidth="0.5" strokeDasharray="4,3" opacity="0.4" />
 
           {/* Fuselage station markers */}
           {[150, 220, 290, 360, 430, 500, 570].map((y, i) => (
             <g key={i}>
-              <line x1="395" y1={y} x2="405" y2={y} stroke="#1E1E22" strokeWidth="0.5" opacity="0.5" />
+              <line x1="395" y1={y} x2="405" y2={y} stroke="#2E2E35" strokeWidth="0.5" opacity="0.5" />
             </g>
           ))}
 
           {/* Wing station markers */}
           {[180, 250, 320].map((x, i) => (
             <g key={`wl-${i}`}>
-              <line x1={x} y1="415" x2={x} y2="425" stroke="#1E1E22" strokeWidth="0.4" opacity="0.4" />
+              <line x1={x} y1="415" x2={x} y2="425" stroke="#2E2E35" strokeWidth="0.4" opacity="0.4" />
             </g>
           ))}
           {[480, 550, 620].map((x, i) => (
             <g key={`wr-${i}`}>
-              <line x1={x} y1="415" x2={x} y2="425" stroke="#1E1E22" strokeWidth="0.4" opacity="0.4" />
+              <line x1={x} y1="415" x2={x} y2="425" stroke="#2E2E35" strokeWidth="0.4" opacity="0.4" />
             </g>
           ))}
 
@@ -180,7 +183,7 @@ export function PlaneView() {
         </g>
 
         {/* Nose direction label */}
-        <text x={cx} y={60} textAnchor="middle" fill="#3A3A3E" fontSize="9" fontFamily="'Roboto Mono', monospace" letterSpacing="2" opacity="0.7">NOSE ↑</text>
+        <text x={cx} y={Math.max(18, cy - 270 * planeScale - 14)} textAnchor="middle" fill="#3A3A3E" fontSize="9" fontFamily="'Roboto Mono', monospace" letterSpacing="2" opacity="0.7">NOSE ↑</text>
 
         {/* Tire dots */}
         {model.tires.map(tire => (
