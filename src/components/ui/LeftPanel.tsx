@@ -23,7 +23,7 @@ export function LeftPanel() {
   const [isModelOpen, setIsModelOpen] = useState(false);
 
   const model = aircraftModels.find(a => a.id === selectedModelId) || aircraftModels[0];
-  const totalDamages = model.tires.reduce((sum, t) => sum + t.damageCount, 0);
+  const totalDamages = model.tires.reduce((sum, t) => sum + (t.damageCount ?? 0), 0);
   const criticalCount = model.tires.filter(t => t.status === 'critical').length;
   const warningCount = model.tires.filter(t => t.status === 'warning').length;
 
@@ -236,7 +236,7 @@ export function LeftPanel() {
                     {getStatusText(tire.status)}
                   </div>
                   <div className="text-xs" style={{ color: '#5A5A60' }}>
-                    {tire.damageCount}处损伤
+                    {(tire.damageCount ?? 0)}处损伤
                   </div>
                 </div>
               </button>

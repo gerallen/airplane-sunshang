@@ -8,6 +8,7 @@ export const aircraftModels: AircraftModel[] = [
   {
     id: "a320",
     name: "空客 A320",
+    manufacturer: "空客",
     type: "窄体客机",
     tireCount: 6,
     tires: [
@@ -24,6 +25,7 @@ export const aircraftModels: AircraftModel[] = [
   {
     id: "b737",
     name: "波音 B737",
+    manufacturer: "波音",
     type: "窄体客机",
     tireCount: 6,
     tires: [
@@ -38,6 +40,7 @@ export const aircraftModels: AircraftModel[] = [
   {
     id: "a330",
     name: "空客 A330",
+    manufacturer: "空客",
     type: "宽体客机",
     tireCount: 10,
     tires: [
@@ -56,6 +59,7 @@ export const aircraftModels: AircraftModel[] = [
   {
     id: "b777",
     name: "波音 B777",
+    manufacturer: "波音",
     type: "宽体客机",
     tireCount: 14,
     tires: [
@@ -78,6 +82,7 @@ export const aircraftModels: AircraftModel[] = [
   {
     id: "a380",
     name: "空客 A380",
+    manufacturer: "空客",
     type: "超大型客机",
     tireCount: 22,
     tires: [
@@ -167,7 +172,7 @@ export function generateDamageHistory(modelId: string, tireId: string): DamageRe
 
 // ========== 生成月度统计 ==========
 
-export function generateMonthlyStats(modelId: string): MonthlyStats[] {
+export function generateMonthlyStats(_modelId: string): MonthlyStats[] {
   const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
   return months.map((month) => ({
     month,

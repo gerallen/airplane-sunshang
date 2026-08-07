@@ -94,8 +94,8 @@ export function RightPanel({ record }: RightPanelProps) {
                     </button>
                   </div>
                   <div className="flex items-center gap-4 mt-2.5">
-                    <span className="text-xs" style={{ color: '#6A6A70' }}>历史损伤 <span style={{ color: '#FFFFFF' }}>{tire.damageCount}</span></span>
-                    <span className="text-xs" style={{ color: '#6A6A70' }}>上次检查 <span style={{ color: '#FFFFFF' }}>{tire.lastInspect}</span></span>
+                    <span className="text-xs" style={{ color: '#6A6A70' }}>历史损伤 <span style={{ color: '#FFFFFF' }}>{tire.damageCount ?? 0}</span></span>
+                    <span className="text-xs" style={{ color: '#6A6A70' }}>上次检查 <span style={{ color: '#FFFFFF' }}>{tire.lastInspect ?? '暂无'}</span></span>
                   </div>
                 </div>
                 <div className="p-4">

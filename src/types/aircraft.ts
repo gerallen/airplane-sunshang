@@ -30,6 +30,7 @@ export interface TireData {
 export interface AircraftModel {
   id: string;
   name: string;
+  manufacturer: string;
   type: string;
   tireCount: number;
   tires: TireData[];
