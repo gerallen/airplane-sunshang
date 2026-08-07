@@ -17,19 +17,22 @@ const POSITION_COLORS: Record<string, string> = {
 const MONTH_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 
 export function DamageChart({ tire }: Props) {
+  const damageHistory = tire.damageHistory ?? [];
+  const monthlyStats = tire.monthlyStats ?? [];
+
   const typeStats = useMemo(() => {
     const stats: Record<string, number> = {};
-    for (const d of tire.damageHistory) stats[d.type] = (stats[d.type] || 0) + 1;
+    for (const d of damageHistory) stats[d.type] = (stats[d.type] || 0) + 1;
     return stats;
-  }, [tire.damageHistory]);
+  }, [damageHistory]);
 
   const positionStats = useMemo(() => {
     const stats: Record<string, number> = {};
-    for (const d of tire.damageHistory) stats[d.position] = (stats[d.position] || 0) + 1;
+    for (const d of damageHistory) stats[d.position] = (stats[d.position] || 0) + 1;
     return stats;
-  }, [tire.damageHistory]);
+  }, [damageHistory]);
 
-  const maxMonthly = Math.max(...tire.monthlyStats, 1);
+  const maxMonthly = Math.max(...monthlyStats, 1);
 
   return (
     <div className="space-y-5">
@@ -37,7 +40,7 @@ export function DamageChart({ tire }: Props) {
       <div>
         <h4 className="text-xs font-medium mb-2.5" style={{ color: '#8A8A93' }}>月度损伤趋势 (过去12个月)</h4>
         <div className="flex items-end gap-1 h-24">
-          {tire.monthlyStats.map((count, i) => (
+          {monthlyStats.map((count, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-1">
               <div className="w-full rounded-t-sm transition-all"
                 style={{
@@ -63,11 +66,11 @@ export function DamageChart({ tire }: Props) {
       )}
 
       {/* History */}
-      {tire.damageHistory.length > 0 ? (
+      {damageHistory.length > 0 ? (
         <div>
           <h4 className="text-xs font-medium mb-2.5" style={{ color: '#8A8A93' }}>历史损伤记录</h4>
           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
-            {tire.damageHistory.map((d, i) => {
+            {damageHistory.map((d, i) => {
               const sev = SEVERITY_STYLE[d.severity];
               return (
                 <div key={i} className="flex items-start gap-2 p-2 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
