@@ -2,14 +2,14 @@ import { useMemo } from 'react';
 import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { getStatusColor, getStatusText } from '@/data/aircraftData';
 import { WOUND_TYPE_MAP, WOUND_POSITION_MAP, SEVERITY_MAP, SEVERITY_STYLE } from '@/data/woundMeta';
-import type { FlightRecord } from '@/types/record';
+import { formatWoundSize, type FlightRecord } from '@/types/record';
 
 interface WoundPanelProps {
   record: FlightRecord;
 }
 
 export function WoundPanel({ record }: WoundPanelProps) {
-  const { wounds, status, landingRunway } = record;
+  const { wounds, status, landingRunway, taxiRoute, parkingStand } = record;
 
   const grouped = useMemo(() => {
     const map: Record<string, typeof wounds> = {};
@@ -39,6 +39,8 @@ export function WoundPanel({ record }: WoundPanelProps) {
           <span className="text-xs" style={{ color: '#5A5A60' }}>暂无损伤记录</span>
         </div>
         <InfoRow label="降落跑道" value={landingRunway} valueColor="#FFD60A" />
+        <InfoRow label="滑行路线" value={taxiRoute} />
+        <InfoRow label="停机位" value={parkingStand} />
       </div>
     );
   }
@@ -56,6 +58,8 @@ export function WoundPanel({ record }: WoundPanelProps) {
       {/* Flight info */}
       <div className="space-y-2.5 p-3.5 rounded-lg border" style={{ backgroundColor: '#111114', borderColor: '#1E1E22' }}>
         <InfoRow label="降落跑道" value={landingRunway} valueColor="#FFD60A" />
+        <InfoRow label="滑行路线" value={taxiRoute} />
+        <InfoRow label="停机位" value={parkingStand} />
         <InfoRow label="涉及轮胎" value={Object.keys(grouped).join('、')} />
       </div>
 
@@ -73,7 +77,7 @@ export function WoundPanel({ record }: WoundPanelProps) {
                 return (
                   <div key={i} className="px-3.5 py-3">
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                      <span className="text-xs font-medium" style={{ color: '#FFFFFF' }}>{w.size}</span>
+                      <span className="text-xs font-medium" style={{ color: '#FFFFFF' }}>{formatWoundSize(w.size)}</span>
                       <Pill label={WOUND_TYPE_MAP[w.type]} />
                       <Pill label={WOUND_POSITION_MAP[w.position]} />
                       <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: s.bg, color: s.color }}>

@@ -3,7 +3,7 @@ import { X, Plus, Trash2 } from 'lucide-react';
 import { aircraftModels } from '@/data/aircraftData';
 import { departureOptions, runwayOptions } from '@/data/recordData';
 import { WOUND_TYPE_OPTIONS, WOUND_POSITION_OPTIONS, SEVERITY_OPTIONS, SEVERITY_STYLE } from '@/data/woundMeta';
-import type { FlightRecord, TireWound } from '@/types/record';
+import { formatWoundSize, type FlightRecord, type TireWound, type WoundSize } from '@/types/record';
 
 interface Props {
   open: boolean;
@@ -29,37 +29,43 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
   const [date, setDate] = useState('');
   const [departure, setDeparture] = useState('');
   const [landingRunway, setLandingRunway] = useState('');
-  const [modelId, setModelId] = useState('a320');
+  const [modelId, setModelId] = useState('b737');
   const [aircraftNo, setAircraftNo] = useState('');
+  const [taxiRoute, setTaxiRoute] = useState('');
+  const [parkingStand, setParkingStand] = useState('');
 
   // --- Wound list ---
   const [wounds, setWounds] = useState<TireWound[]>([]);
 
   // --- Current wound draft ---
-  const [draft, setDraft] = useState<TireWound>({
-    tireId: '', size: '', type: 'cut', position: 'tread', severity: 'low', description: '',
-  });
+  const emptyDraft: TireWound = {
+    tireId: '', size: {}, type: 'cut', position: 'tread', severity: 'low', description: '',
+  };
+  const [draft, setDraft] = useState<TireWound>(emptyDraft);
 
   const model = aircraftModels.find(m => m.id === modelId);
   const tireIds = model?.tires.map(t => t.id) ?? [];
 
   const resetAll = useCallback(() => {
     setDate(''); setDeparture(''); setLandingRunway('');
-    setModelId('a320'); setAircraftNo(''); setWounds([]);
-    setDraft({ tireId: '', size: '', type: 'cut', position: 'tread', severity: 'low', description: '' });
+    setModelId('b737'); setAircraftNo(''); setWounds([]);
+    setTaxiRoute(''); setParkingStand('');
+    setDraft(emptyDraft);
   }, []);
 
   const updateDraft = useCallback((patch: Partial<TireWound>) => {
     setDraft(prev => ({ ...prev, ...patch }));
   }, []);
 
+  const hasSize = (s: WoundSize) => s.length !== undefined || s.width !== undefined || s.depth !== undefined;
+
   const addWound = useCallback(() => {
-    if (!draft.tireId || !draft.size) return;
+    if (!draft.tireId || !hasSize(draft.size)) return;
     setWounds(prev => [...prev, {
       ...draft,
       description: draft.description || WOUND_TYPE_OPTIONS.find(o => o.value === draft.type)?.label || '',
     }]);
-    setDraft({ tireId: '', size: '', type: 'cut', position: 'tread', severity: 'low', description: '' });
+    setDraft(emptyDraft);
   }, [draft]);
 
   const removeWound = useCallback((idx: number) => {
@@ -72,7 +78,10 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
 
     onAdd({
       id: `F${String(Date.now()).slice(-6)}`,
-      date, departure, landingRunway, modelId,
+      date, departure, landingRunway,
+      taxiRoute: taxiRoute || '—',
+      parkingStand: parkingStand || '—',
+      modelId,
       modelName: model ? `${model.manufacturer} ${model.name}` : modelId,
       aircraftNo: aircraftNo.toUpperCase(),
       wounds,
@@ -80,11 +89,11 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
     });
     resetAll();
     onClose();
-  }, [date, departure, landingRunway, modelId, aircraftNo, model, wounds, onAdd, resetAll, onClose]);
+  }, [date, departure, landingRunway, taxiRoute, parkingStand, modelId, aircraftNo, model, wounds, onAdd, resetAll, onClose]);
 
   if (!open) return null;
 
-  const canAddWound = Boolean(draft.tireId && draft.size);
+  const canAddWound = Boolean(draft.tireId && hasSize(draft.size));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
@@ -125,6 +134,22 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
             </select>
           </Field>
 
+          {/* Taxi route + Parking stand */}
+          <div className="flex gap-3">
+            <Field label="降落滑行路线">
+              <input type="text" value={taxiRoute} onChange={e => setTaxiRoute(e.target.value)}
+                placeholder="如 A5→B3→C2"
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+                style={inputStyle} />
+            </Field>
+            <Field label="停机位">
+              <input type="text" value={parkingStand} onChange={e => setParkingStand(e.target.value)}
+                placeholder="如 W123"
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+                style={inputStyle} />
+            </Field>
+          </div>
+
           {/* Model + Aircraft No */}
           <div className="flex gap-3">
             <Field label="机型" required>
@@ -157,7 +182,7 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
                   return (
                     <div key={i} className="flex items-center gap-2 p-2 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
                       <span className="text-xs font-bold font-mono" style={{ color: '#00D2FF' }}>{w.tireId}</span>
-                      <span className="text-xs" style={{ color: '#C8C8CD' }}>{w.size}</span>
+                      <span className="text-xs" style={{ color: '#C8C8CD' }}>{formatWoundSize(w.size)}</span>
                       <MiniPill label={WOUND_TYPE_OPTIONS.find(o => o.value === w.type)?.label ?? w.type} />
                       <MiniPill label={WOUND_POSITION_OPTIONS.find(o => o.value === w.position)?.label ?? w.position} />
                       <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: sev.bg, color: sev.color }}>
@@ -193,11 +218,25 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
                 ))}
               </div>
 
-              {/* Size / Type / Position / Severity */}
-              <div className="grid grid-cols-4 gap-2">
-                <input type="text" value={draft.size} onChange={e => updateDraft({ size: e.target.value })}
-                  placeholder="尺寸" className="w-full px-2 py-2 rounded border text-xs outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
-                  style={inputStyle} />
+              {/* Size (mm, 长/宽/深) */}
+              <div className="grid grid-cols-3 gap-2">
+                {([['length', '长'], ['width', '宽'], ['depth', '深']] as const).map(([dim, label]) => (
+                  <div key={dim} className="relative">
+                    <input
+                      type="number" min={0} value={draft.size[dim] ?? ''}
+                      onChange={e => {
+                        const v = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value));
+                        updateDraft({ size: { ...draft.size, [dim]: v } });
+                      }}
+                      placeholder={`${label} (mm)`}
+                      className="w-full px-2 py-2 rounded border text-xs outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+                      style={inputStyle} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Type / Position / Severity */}
+              <div className="grid grid-cols-3 gap-2">
                 <Select value={draft.type} onChange={v => updateDraft({ type: v as TireWound['type'] })} options={WOUND_TYPE_OPTIONS} />
                 <Select value={draft.position} onChange={v => updateDraft({ position: v as TireWound['position'] })} options={WOUND_POSITION_OPTIONS} />
                 <Select value={draft.severity} onChange={v => updateDraft({ severity: v as TireWound['severity'] })} options={SEVERITY_OPTIONS} />

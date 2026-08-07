@@ -86,6 +86,14 @@ export function DamageChart({ tire }: Props) {
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-[10px]" style={{ color: '#6A6A70' }}>{WOUND_POSITION_MAP[d.position]}</span>
                       <span className="text-[10px]" style={{ color: '#6A6A70' }}>{d.date}</span>
+                      {d.departure && (
+                        <span className="text-[10px]" style={{ color: '#6A6A70' }}>
+                          {d.departure} → <span className="font-mono" style={{ color: '#FFD60A' }}>{d.runway}</span>
+                        </span>
+                      )}
+                      {d.aircraftNo && (
+                        <span className="text-[10px] font-mono" style={{ color: '#6A6A70' }}>{d.aircraftNo}</span>
+                      )}
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: '#AAAAAF' }}>
                         尺寸 {d.size}
                       </span>
