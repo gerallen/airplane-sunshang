@@ -68,7 +68,7 @@ export default function DetailPage() {
   const { modelId } = useParams<{ modelId: string }>();
 
   return (
-    <AppProvider initialModelId={modelId || 'A320'}>
+    <AppProvider initialModelId={(modelId || 'a320').toLowerCase()}>
       <DetailContent />
     </AppProvider>
   );
