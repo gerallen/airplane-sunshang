@@ -124,9 +124,23 @@ function BarGroup({ title, stats, labelMap, colorMap }: {
       <h4 className="text-xs font-medium mb-2.5" style={{ color: '#8A8A93' }}>{title}</h4>
       <div className="space-y-2">
         {Object.entries(stats).map(([key, count]) => (
-          <div key={count = key} className="flex items-center gap-2"></div>
+          <div key={key} className="flex items-center gap-2">
+            <span className="text-xs w-10 flex-shrink-0" style={{ color: '#8A8A93' }}>{labelMap[key]}</span>
+            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#1A1A1E' }}>
+              <div className="h-full rounded-full" style={{ width: `${(count / max) * 100}%`, backgroundColor: colorMap[key] ?? '#8A8A93' }} />
+            </div>
+            <span className="text-xs w-6 text-right font-medium" style={{ color: colorMap[key] ?? '#FFFFFF' }}>{count}</span>
+          </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex items-center justify-center py-6 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
+      <span className="text-sm" style={{ color: '#6A6A70' }}>该位置暂无损伤记录</span>
     </div>
   );
 }
