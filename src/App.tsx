@@ -1,13 +1,16 @@
 import { Routes, Route } from 'react-router';
-import DetailPage from '@/pages/DetailPage';
+import { FleetProvider } from '@/context/FleetContext';
+import { DetailPage } from '@/pages/DetailPage';
 import TablePage from '@/pages/TablePage';
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<TablePage />} />
-      <Route path="/detail/:modelId/:recordId" element={<DetailPage />} />
-    </Routes>
+    <FleetProvider>
+      <Routes>
+        <Route path="/" element={<TablePage />} />
+        <Route path="/detail/:aircraftId" element={<DetailPage />} />
+      </Routes>
+    </FleetProvider>
   );
 }
 

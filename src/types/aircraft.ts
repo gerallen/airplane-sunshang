@@ -2,7 +2,8 @@ export interface TireDamage {
   date: string;
   type: 'cut' | 'puncture' | 'wear' | 'bulge' | 'crack';
   position: 'tread' | 'sidewall' | 'shoulder' | 'bead';
-  severity: 'low' | 'medium' | 'high';
+  /** 其他损伤的类目（损伤位置为"其他"时） */
+  category?: string;
   size: string;
   description: string;
   /** 损伤当次航班信息（用于归因分析） */

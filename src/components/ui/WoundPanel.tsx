@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { getStatusColor, getStatusText } from '@/data/aircraftData';
-import { WOUND_TYPE_MAP, WOUND_POSITION_MAP, SEVERITY_MAP, SEVERITY_STYLE } from '@/data/woundMeta';
+import { WOUND_TYPE_MAP, WOUND_POSITION_MAP } from '@/data/woundMeta';
 import { formatWoundSize, type FlightRecord } from '@/types/record';
 
 interface WoundPanelProps {
@@ -60,34 +60,31 @@ export function WoundPanel({ record }: WoundPanelProps) {
         <InfoRow label="降落跑道" value={landingRunway} valueColor="#FFD60A" />
         <InfoRow label="滑行路线" value={taxiRoute} />
         <InfoRow label="停机位" value={parkingStand} />
-        <InfoRow label="涉及轮胎" value={Object.keys(grouped).join('、')} />
+        <InfoRow label="涉及位置" value={Object.keys(grouped).join('、')} />
       </div>
 
-      {/* Wounds grouped by tire */}
+      {/* Wounds grouped by damage target */}
       <div className="space-y-3">
         {Object.entries(grouped).map(([tireId, ws]) => (
           <div key={tireId} className="rounded-lg border overflow-hidden" style={{ borderColor: '#1E1E22', backgroundColor: '#111114' }}>
             <div className="px-3.5 py-2.5 flex items-center gap-2.5" style={{ backgroundColor: '#0E0E10' }}>
-              <span className="text-xs font-bold font-mono" style={{ color: '#00D2FF' }}>{tireId}</span>
+              <span className="text-xs font-bold font-mono" style={{ color: '#00D2FF' }}>
+                {tireId === '其他' ? `其他·${ws[0]?.category ?? ''}` : tireId}
+              </span>
               <Badge count={ws.length} />
             </div>
             <div className="divide-y" style={{ borderColor: '#1A1A1E' }}>
-              {ws.map((w, i) => {
-                const s = SEVERITY_STYLE[w.severity];
-                return (
-                  <div key={i} className="px-3.5 py-3">
-                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                      <span className="text-xs font-medium" style={{ color: '#FFFFFF' }}>{formatWoundSize(w.size)}</span>
-                      <Pill label={WOUND_TYPE_MAP[w.type]} />
-                      <Pill label={WOUND_POSITION_MAP[w.position]} />
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: s.bg, color: s.color }}>
-                        {SEVERITY_MAP[w.severity]}
-                      </span>
-                    </div>
-                    <div className="text-xs leading-relaxed" style={{ color: '#8A8A93' }}>{w.description}</div>
+              {ws.map((w, i) => (
+                <div key={i} className="px-3.5 py-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    <span className="text-xs font-medium" style={{ color: '#FFFFFF' }}>{formatWoundSize(w.size)}</span>
+                    <Pill label={WOUND_TYPE_MAP[w.type]} />
+                    {w.tireId !== '其他' && <Pill label={WOUND_POSITION_MAP[w.position]} />}
+                    {w.attachment && <Pill label={w.attachment} />}
                   </div>
-                );
-              })}
+                  <div className="text-xs leading-relaxed" style={{ color: '#8A8A93' }}>{w.description}</div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -95,7 +92,7 @@ export function WoundPanel({ record }: WoundPanelProps) {
 
       {/* Distribution bar chart */}
       <div>
-        <h4 className="text-xs font-medium mb-3 tracking-wide" style={{ color: '#6A6A70' }}>各轮胎伤口分布</h4>
+        <h4 className="text-xs font-medium mb-3 tracking-wide" style={{ color: '#6A6A70' }}>各位置伤口分布</h4>
         <div className="space-y-2.5">
           {Object.entries(grouped).map(([tireId, ws]) => (
             <Bar key={tireId} label={tireId} value={ws.length} max={maxCount} />
