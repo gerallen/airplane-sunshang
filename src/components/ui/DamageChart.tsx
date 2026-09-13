@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { WOUND_TYPE_MAP, WOUND_POSITION_MAP, SEVERITY_MAP, SEVERITY_STYLE } from '@/data/woundMeta';
+import { WOUND_TYPE_MAP, WOUND_POSITION_MAP } from '@/data/woundMeta';
 import type { TireData } from '@/types/aircraft';
 
 interface Props {
@@ -71,16 +71,18 @@ export function DamageChart({ tire }: Props) {
           <h4 className="text-xs font-medium mb-2.5" style={{ color: '#8A8A93' }}>历史损伤记录</h4>
           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
             {damageHistory.map((d, i) => {
-              const sev = SEVERITY_STYLE[d.severity];
+              const dotColor = TYPE_COLORS[d.type] ?? '#8A8A93';
               return (
                 <div key={i} className="flex items-start gap-2 p-2 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
-                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: sev.color }} />
+                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: dotColor }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-medium" style={{ color: '#FFFFFF' }}>{WOUND_TYPE_MAP[d.type]}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: sev.bg, color: sev.color }}>
-                        {SEVERITY_MAP[d.severity]}
-                      </span>
+                      {d.category && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,214,10,0.12)', color: '#FFD60A' }}>
+                          {d.category}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs mt-0.5 truncate" style={{ color: '#8A8A93' }}>{d.description}</div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -122,23 +124,9 @@ function BarGroup({ title, stats, labelMap, colorMap }: {
       <h4 className="text-xs font-medium mb-2.5" style={{ color: '#8A8A93' }}>{title}</h4>
       <div className="space-y-2">
         {Object.entries(stats).map(([key, count]) => (
-          <div key={key} className="flex items-center gap-2">
-            <span className="text-xs w-10 flex-shrink-0" style={{ color: '#8A8A93' }}>{labelMap[key]}</span>
-            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#1A1A1E' }}>
-              <div className="h-full rounded-full" style={{ width: `${(count / max) * 100}%`, backgroundColor: colorMap[key] ?? '#8A8A93' }} />
-            </div>
-            <span className="text-xs w-6 text-right font-medium" style={{ color: colorMap[key] ?? '#FFFFFF' }}>{count}</span>
-          </div>
+          <div key={count = key} className="flex items-center gap-2"></div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex items-center justify-center py-6 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
-      <span className="text-sm" style={{ color: '#6A6A70' }}>该机轮暂无损伤记录</span>
     </div>
   );
 }
