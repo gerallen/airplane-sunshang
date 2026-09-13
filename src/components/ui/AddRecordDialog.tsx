@@ -1,55 +1,75 @@
 import { useState, useCallback } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import { aircraftModels } from '@/data/aircraftData';
-import { departureOptions, runwayOptions } from '@/data/recordData';
-import { WOUND_TYPE_OPTIONS, WOUND_POSITION_OPTIONS, SEVERITY_OPTIONS, SEVERITY_STYLE } from '@/data/woundMeta';
+import { departureOptions, runwayOptions } from '@/data/fleetData';
+import { WOUND_TYPE_OPTIONS, WOUND_POSITION_OPTIONS } from '@/data/woundMeta';
 import { formatWoundSize, type FlightRecord, type TireWound, type WoundSize } from '@/types/record';
 
 interface Props {
   open: boolean;
+  aircraftNo: string;
+  tireIds: string[];
   onClose: () => void;
-  onAdd: (record: FlightRecord) => void;
+  onAdd: (record: Omit<FlightRecord, 'id'>) => void;
 }
 
-const DEFAULT_STATUS: Record<number, FlightRecord['status']> = {
-  0: 'normal',
-  1: 'warning',
-  2: 'warning',
-  3: 'warning',
-  4: 'warning',
-  5: 'warning',
-};
-
-function getStatusByCount(n: number): FlightRecord['status'] {
-  return DEFAULT_STATUS[n] ?? (n >= 6 ? 'critical' : 'warning');
+/** 当前时间，datetime-local 格式（精确到分） */
+function nowLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function todayLocal(): string {
+  return nowLocal().slice(0, 10);
+}
+function nowTime(): string {
+  return nowLocal().slice(11, 16);
 }
 
-export function AddRecordDialog({ open, onClose, onAdd }: Props) {
+function getStatusByWounds(wounds: TireWound[]): FlightRecord['status'] {
+  if (wounds.length === 0) return 'normal';
+  if (wounds.length >= 5) return 'critical';
+  return 'warning';
+}
+
+export function AddRecordDialog({ open, aircraftNo, tireIds, onClose, onAdd }: Props) {
   // --- Base info ---
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(todayLocal());
+  const [airline, setAirline] = useState('');
+  const [flightNo, setFlightNo] = useState('');
   const [departure, setDeparture] = useState('');
+  const [arrival, setArrival] = useState('');
   const [landingRunway, setLandingRunway] = useState('');
-  const [modelId, setModelId] = useState('b737');
-  const [aircraftNo, setAircraftNo] = useState('');
+  const [landingTime, setLandingTime] = useState(nowTime());
   const [taxiRoute, setTaxiRoute] = useState('');
   const [parkingStand, setParkingStand] = useState('');
+
+  // --- Event handling info ---
+  const [lastInspectTime, setLastInspectTime] = useState(nowLocal());
+  const [fodAlarm, setFodAlarm] = useState<boolean | null>(null);
+  const [reportTime, setReportTime] = useState(nowLocal());
+  const [arriveTime, setArriveTime] = useState(nowLocal());
+  const [finishTime, setFinishTime] = useState(nowLocal());
+  const [lastRunwayInspectTime, setLastRunwayInspectTime] = useState(nowLocal());
+  const [lastTaxiwayInspectTime, setLastTaxiwayInspectTime] = useState(nowLocal());
 
   // --- Wound list ---
   const [wounds, setWounds] = useState<TireWound[]>([]);
 
   // --- Current wound draft ---
   const emptyDraft: TireWound = {
-    tireId: '', size: {}, type: 'cut', position: 'tread', severity: 'low', description: '',
+    tireId: '', category: '', size: {}, type: 'cut', position: 'tread', attachment: '无附着物', description: '',
   };
   const [draft, setDraft] = useState<TireWound>(emptyDraft);
 
-  const model = aircraftModels.find(m => m.id === modelId);
-  const tireIds = model?.tires.map(t => t.id) ?? [];
-
   const resetAll = useCallback(() => {
-    setDate(''); setDeparture(''); setLandingRunway('');
-    setModelId('b737'); setAircraftNo(''); setWounds([]);
+    setDate(todayLocal());
+    setAirline(''); setFlightNo('');
+    setDeparture(''); setArrival(''); setLandingRunway(''); setLandingTime(nowTime());
     setTaxiRoute(''); setParkingStand('');
+    setLastInspectTime(nowLocal()); setFodAlarm(null);
+    setReportTime(nowLocal()); setArriveTime(nowLocal()); setFinishTime(nowLocal());
+    setLastRunwayInspectTime(nowLocal()); setLastTaxiwayInspectTime(nowLocal());
+    setWounds([]);
     setDraft(emptyDraft);
   }, []);
 
@@ -58,15 +78,18 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
   }, []);
 
   const hasSize = (s: WoundSize) => s.length !== undefined || s.width !== undefined || s.depth !== undefined;
+  const isOther = draft.tireId === '其他';
 
   const addWound = useCallback(() => {
     if (!draft.tireId || !hasSize(draft.size)) return;
+    if (isOther && !draft.category?.trim()) return;
     setWounds(prev => [...prev, {
       ...draft,
+      category: isOther ? draft.category?.trim() : undefined,
       description: draft.description || WOUND_TYPE_OPTIONS.find(o => o.value === draft.type)?.label || '',
     }]);
     setDraft(emptyDraft);
-  }, [draft]);
+  }, [draft, isOther]);
 
   const removeWound = useCallback((idx: number) => {
     setWounds(prev => prev.filter((_, i) => i !== idx));
@@ -74,52 +97,97 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !departure || !aircraftNo || !landingRunway) return;
+    if (!date || !departure || !landingRunway) return;
 
     onAdd({
-      id: `F${String(Date.now()).slice(-6)}`,
       date, departure, landingRunway,
       taxiRoute: taxiRoute || '—',
       parkingStand: parkingStand || '—',
-      modelId,
-      modelName: model ? `${model.manufacturer} ${model.name}` : modelId,
-      aircraftNo: aircraftNo.toUpperCase(),
+      airline: airline || undefined,
+      flightNo: flightNo || undefined,
+      arrival: arrival || undefined,
+      landingTime: landingTime || undefined,
+      lastInspectTime: lastInspectTime || undefined,
+      fodAlarm: fodAlarm ?? undefined,
+      reportTime: reportTime || undefined,
+      arriveTime: arriveTime || undefined,
+      finishTime: finishTime || undefined,
+      lastRunwayInspectTime: lastRunwayInspectTime || undefined,
+      lastTaxiwayInspectTime: lastTaxiwayInspectTime || undefined,
       wounds,
-      status: getStatusByCount(wounds.length),
+      status: getStatusByWounds(wounds),
     });
     resetAll();
     onClose();
-  }, [date, departure, landingRunway, taxiRoute, parkingStand, modelId, aircraftNo, model, wounds, onAdd, resetAll, onClose]);
+  }, [date, departure, landingRunway, taxiRoute, parkingStand, airline, flightNo, arrival, landingTime,
+    lastInspectTime, fodAlarm, reportTime, arriveTime, finishTime,
+    lastRunwayInspectTime, lastTaxiwayInspectTime, wounds, onAdd, resetAll, onClose]);
 
   if (!open) return null;
 
-  const canAddWound = Boolean(draft.tireId && hasSize(draft.size));
+  const canAddWound = Boolean(draft.tireId && hasSize(draft.size) && (!isOther || draft.category?.trim()));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div className="w-[480px] max-h-[92vh] overflow-y-auto rounded-xl border p-5" style={{ backgroundColor: '#111114', borderColor: '#2A2A2E' }}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold" style={{ color: '#FFFFFF' }}>录入新记录</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-semibold" style={{ color: '#FFFFFF' }}>录入损伤记录</h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#2A2A2E]">
             <X className="w-4 h-4" style={{ color: '#8A8A93' }} />
           </button>
         </div>
+        <p className="text-xs mb-4" style={{ color: '#5A5A60' }}>
+          飞机编号 <span className="font-mono font-semibold" style={{ color: '#00D2FF' }}>{aircraftNo}</span>
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Date + Departure */}
+          {/* Date + Airline */}
           <div className="flex gap-3">
             <Field label="日期" required>
               <input type="date" value={date} onChange={e => setDate(e.target.value)} required
                 className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
                 style={inputStyle} />
             </Field>
+            <Field label="航空公司">
+              <input type="text" value={airline} onChange={e => setAirline(e.target.value)}
+                placeholder="如 顺丰航空"
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+                style={inputStyle} />
+            </Field>
+          </div>
+
+          {/* Flight no + landing time */}
+          <div className="flex gap-3">
+            <Field label="航班号">
+              <input type="text" value={flightNo} onChange={e => setFlightNo(e.target.value)}
+                placeholder="如 O3182"
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+                style={inputStyle} />
+            </Field>
+            <Field label="落地时间">
+              <input type="time" value={landingTime} onChange={e => setLandingTime(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
+                style={inputStyle} />
+            </Field>
+          </div>
+
+          {/* Departure + Arrival */}
+          <div className="flex gap-3">
             <Field label="起飞地" required>
               <select value={departure} onChange={e => setDeparture(e.target.value)} required
                 className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF] appearance-none"
                 style={inputStyle}>
                 <option value="">请选择</option>
                 {departureOptions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </Field>
+            <Field label="到达机场">
+              <select value={arrival} onChange={e => setArrival(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF] appearance-none"
+                style={inputStyle}>
+                <option value="">请选择</option>
+                {departureOptions.filter(d => d !== departure).map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </Field>
           </div>
@@ -138,34 +206,75 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
           <div className="flex gap-3">
             <Field label="降落滑行路线">
               <input type="text" value={taxiRoute} onChange={e => setTaxiRoute(e.target.value)}
-                placeholder="如 A5→B3→C2"
+                placeholder="如 19L-C5-C-D6-D-L6-358"
                 className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
                 style={inputStyle} />
             </Field>
             <Field label="停机位">
               <input type="text" value={parkingStand} onChange={e => setParkingStand(e.target.value)}
-                placeholder="如 W123"
+                placeholder="如 358"
                 className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
                 style={inputStyle} />
             </Field>
           </div>
 
-          {/* Model + Aircraft No */}
-          <div className="flex gap-3">
-            <Field label="机型" required>
-              <select value={modelId}
-                onChange={e => { setModelId(e.target.value); updateDraft({ tireId: '' }); }}
-                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF] appearance-none"
-                style={inputStyle}>
-                {aircraftModels.map(m => <option key={m.id} value={m.id}>{m.manufacturer} {m.name}</option>)}
-              </select>
-            </Field>
-            <Field label="飞机编号" required>
-              <input type="text" value={aircraftNo} onChange={e => setAircraftNo(e.target.value)}
-                placeholder="如 B-2378" required
-                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+          {/* ── 事件处置信息 ── */}
+          <div className="border-t pt-4 space-y-3" style={{ borderColor: '#2A2A2E' }}>
+            <div className="text-xs font-medium" style={{ color: '#00D2FF' }}>事件处置信息</div>
+
+            <Field label="上次检查时间">
+              <input type="datetime-local" value={lastInspectTime} onChange={e => setLastInspectTime(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
                 style={inputStyle} />
             </Field>
+
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8A8A93' }}>FOD 期间是否有报警</label>
+              <div className="flex gap-2">
+                {([['yes', '有报警', true], ['no', '无报警', false]] as const).map(([key, label, val]) => (
+                  <button key={key} type="button" onClick={() => setFodAlarm(val)}
+                    className="flex-1 py-2 rounded-lg text-xs font-medium border transition-colors"
+                    style={{
+                      borderColor: fodAlarm === val ? (val ? '#FF3B30' : '#00D2FF') : '#2A2A2E',
+                      backgroundColor: fodAlarm === val ? (val ? 'rgba(255,59,48,0.1)' : 'rgba(0,210,255,0.08)') : 'transparent',
+                      color: fodAlarm === val ? (val ? '#FF3B30' : '#00D2FF') : '#8A8A93',
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              <Field label="事件通报时间">
+                <input type="datetime-local" value={reportTime} onChange={e => setReportTime(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
+                  style={inputStyle} />
+              </Field>
+              <Field label="到达处理时间">
+                <input type="datetime-local" value={arriveTime} onChange={e => setArriveTime(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
+                  style={inputStyle} />
+              </Field>
+              <Field label="事件处理结束通报时间">
+                <input type="datetime-local" value={finishTime} onChange={e => setFinishTime(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
+                  style={inputStyle} />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="上次跑道巡查时间">
+                <input type="datetime-local" value={lastRunwayInspectTime} onChange={e => setLastRunwayInspectTime(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
+                  style={inputStyle} />
+              </Field>
+              <Field label="滑行道检查时间">
+                <input type="datetime-local" value={lastTaxiwayInspectTime} onChange={e => setLastTaxiwayInspectTime(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none focus:border-[#00D2FF]"
+                  style={inputStyle} />
+              </Field>
+            </div>
           </div>
 
           {/* ── Wounds Section ── */}
@@ -177,25 +286,23 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
             {/* Added wounds list */}
             {wounds.length > 0 && (
               <div className="space-y-1.5 mb-4 max-h-40 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-                {wounds.map((w, i) => {
-                  const sev = SEVERITY_STYLE[w.severity];
-                  return (
-                    <div key={i} className="flex items-center gap-2 p-2 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
-                      <span className="text-xs font-bold font-mono" style={{ color: '#00D2FF' }}>{w.tireId}</span>
-                      <span className="text-xs" style={{ color: '#C8C8CD' }}>{formatWoundSize(w.size)}</span>
-                      <MiniPill label={WOUND_TYPE_OPTIONS.find(o => o.value === w.type)?.label ?? w.type} />
+                {wounds.map((w, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg" style={{ backgroundColor: '#1A1A1E' }}>
+                    <span className="text-xs font-bold font-mono" style={{ color: '#00D2FF' }}>
+                      {w.tireId === '其他' ? `其他·${w.category ?? ''}` : w.tireId}
+                    </span>
+                    <span className="text-xs" style={{ color: '#C8C8CD' }}>{formatWoundSize(w.size)}</span>
+                    <MiniPill label={WOUND_TYPE_OPTIONS.find(o => o.value === w.type)?.label ?? w.type} />
+                    {w.tireId !== '其他' && (
                       <MiniPill label={WOUND_POSITION_OPTIONS.find(o => o.value === w.position)?.label ?? w.position} />
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: sev.bg, color: sev.color }}>
-                        {SEVERITY_OPTIONS.find(o => o.value === w.severity)?.label ?? w.severity}
-                      </span>
-                      <span className="text-[10px] flex-1 truncate" style={{ color: '#8A8A93' }}>{w.description}</span>
-                      <button type="button" onClick={() => removeWound(i)}
-                        className="w-6 h-6 rounded flex items-center justify-center hover:bg-[#2A2A2E]">
-                        <Trash2 className="w-3 h-3" style={{ color: '#FF3B30' }} />
-                      </button>
-                    </div>
-                  );
-                })}
+                    )}
+                    <span className="text-[10px] flex-1 truncate" style={{ color: '#8A8A93' }}>{w.description}</span>
+                    <button type="button" onClick={() => removeWound(i)}
+                      className="w-6 h-6 rounded flex items-center justify-center hover:bg-[#2A2A2E]">
+                      <Trash2 className="w-3 h-3" style={{ color: '#FF3B30' }} />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -203,9 +310,9 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
             <div className="space-y-2.5 p-3 rounded-lg border" style={{ borderColor: '#1E1E22', backgroundColor: '#0E0E10' }}>
               <span className="text-xs" style={{ color: '#8A8A93' }}>添加伤口</span>
 
-              {/* Tire quick-select */}
+              {/* Damage target quick-select */}
               <div className="flex gap-2 flex-wrap">
-                {tireIds.map(id => (
+                {[...tireIds, '其他'].map(id => (
                   <button key={id} type="button" onClick={() => updateDraft({ tireId: id })}
                     className="text-[11px] px-2.5 py-1 rounded border transition-colors"
                     style={{
@@ -217,6 +324,14 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
                   </button>
                 ))}
               </div>
+
+              {/* 其他 → category required */}
+              {isOther && (
+                <input type="text" value={draft.category ?? ''} onChange={e => updateDraft({ category: e.target.value })}
+                  placeholder="损伤类目（必填），如 轮毂 / 刹车组件 / 起落架舱门"
+                  className="w-full px-2 py-2 rounded border text-xs outline-none placeholder:text-[#5A5A60] focus:border-[#FFD60A]"
+                  style={{ ...inputStyle, borderColor: 'rgba(255,214,10,0.4)' }} />
+              )}
 
               {/* Size (mm, 长/宽/深) */}
               <div className="grid grid-cols-3 gap-2">
@@ -235,12 +350,19 @@ export function AddRecordDialog({ open, onClose, onAdd }: Props) {
                 ))}
               </div>
 
-              {/* Type / Position / Severity */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* Type / Position */}
+              <div className="grid grid-cols-2 gap-2">
                 <Select value={draft.type} onChange={v => updateDraft({ type: v as TireWound['type'] })} options={WOUND_TYPE_OPTIONS} />
-                <Select value={draft.position} onChange={v => updateDraft({ position: v as TireWound['position'] })} options={WOUND_POSITION_OPTIONS} />
-                <Select value={draft.severity} onChange={v => updateDraft({ severity: v as TireWound['severity'] })} options={SEVERITY_OPTIONS} />
+                {!isOther && (
+                  <Select value={draft.position} onChange={v => updateDraft({ position: v as TireWound['position'] })} options={WOUND_POSITION_OPTIONS} />
+                )}
               </div>
+
+              {/* Attachment */}
+              <input type="text" value={draft.attachment ?? ''} onChange={e => updateDraft({ attachment: e.target.value })}
+                placeholder="伤口附着物，如 无附着物"
+                className="w-full px-2 py-2 rounded border text-xs outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
+                style={inputStyle} />
 
               <input type="text" value={draft.description} onChange={e => updateDraft({ description: e.target.value })}
                 placeholder="描述（可选）" className="w-full px-2 py-2 rounded border text-xs outline-none placeholder:text-[#5A5A60] focus:border-[#00D2FF]"
