@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react';
-import { useApp } from '@/context/AppContext';
-import { aircraftModels, getStatusColor, getStatusText, daysSince } from '@/data/aircraftData';
+import { getStatusColor, getStatusText, daysSince } from '@/data/aircraftData';
+import { buildTireViewWithOther } from '@/data/fleetData';
+import { Megaphone } from 'lucide-react';
 import { TireHistoryDialog } from './TireHistoryDialog';
-import type { FlightRecord } from '@/types/record';
+import type { Aircraft, FlightRecord } from '@/types';
 import type { TireData } from '@/types/aircraft';
 
 interface TireTableProps {
-  record?: FlightRecord;
+  aircraft: Aircraft;
+  selectedRecord?: FlightRecord;
+  /** 点击生成事件通报（针对当前查看的记录） */
+  onShowReport?: () => void;
 }
 
 /** 迷你趋势图（近12个月损伤频率 sparkline） */
@@ -34,17 +38,21 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
   );
 }
 
-export function TireTable({ record }: TireTableProps) {
-  const { selectedModelId } = useApp();
-  const model = aircraftModels.find(a => a.id === selectedModelId) || aircraftModels[0];
+export function TireTable({ aircraft, selectedRecord, onShowReport }: TireTableProps) {
   const [dialogTire, setDialogTire] = useState<TireData | null>(null);
 
-  // 本次航班各轮胎新增伤口数
+  // 轮胎视图：由该飞机的检查记录实时聚合
+  const tires = useMemo(() => buildTireViewWithOther(aircraft), [aircraft]);
+
+  // 选中检查记录的各轮胎伤口数
   const woundCountByTire = useMemo(() => {
     const map: Record<string, number> = {};
-    record?.wounds.forEach(w => { map[w.tireId] = (map[w.tireId] || 0) + 1; });
+    selectedRecord?.wounds.forEach(w => { map[w.tireId] = (map[w.tireId] || 0) + 1; });
     return map;
-  }, [record]);
+  }, [selectedRecord]);
+
+  const criticalCount = tires.filter(t => t.status === 'critical').length;
+  const warningCount = tires.filter(t => t.status === 'warning').length;
 
   const thCls = 'text-left text-xs font-medium px-4 py-3 whitespace-nowrap';
   const thStyle = { color: '#5A5A60' };
@@ -52,53 +60,51 @@ export function TireTable({ record }: TireTableProps) {
   return (
     <div className="h-full overflow-auto p-6" style={{ scrollbarWidth: 'thin' }}>
       <div className="max-w-6xl mx-auto">
-        {/* Header: 机号 + 机型 */}
-        <div className="mb-5 flex items-center gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold tracking-tight font-mono" style={{ color: '#FFFFFF' }}>
-                {record?.aircraftNo ?? '—'}
-              </span>
-              {record && (
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{
-                    backgroundColor: `${getStatusColor(record.status)}15`,
-                    color: getStatusColor(record.status),
-                    border: `1px solid ${getStatusColor(record.status)}25`,
-                  }}
-                >
-                  {getStatusText(record.status)}
-                </span>
-              )}
-            </div>
-            <div className="text-sm mt-1" style={{ color: '#8A8A93' }}>
-              {record?.modelName ?? `${model.manufacturer} ${model.name}`}
-            </div>
+        {/* Stats row */}
+        <div className="flex items-center gap-6 mb-4">
+          <div className="text-xs" style={{ color: '#5A5A60' }}>
+            损伤位置 <span className="text-sm font-bold" style={{ color: '#FFFFFF' }}>{tires.length}</span>
           </div>
-          <div className="ml-auto text-right">
-            <div className="text-xs" style={{ color: '#5A5A60' }}>机轮总数</div>
-            <div className="text-lg font-bold" style={{ color: '#00D2FF' }}>{model.tireCount}</div>
+          <div className="text-xs" style={{ color: '#5A5A60' }}>
+            预警 <span className="text-sm font-bold" style={{ color: '#FFD60A' }}>{warningCount}</span>
           </div>
+          <div className="text-xs" style={{ color: '#5A5A60' }}>
+            严重 <span className="text-sm font-bold" style={{ color: '#FF3B30' }}>{criticalCount}</span>
+          </div>
+          {selectedRecord && (
+            <div className="text-xs ml-auto" style={{ color: '#5A5A60' }}>
+              最新记录：<span style={{ color: '#8A8A93' }}>{selectedRecord.date}</span>
+              <span className="font-mono" style={{ color: '#FFD60A' }}>（{selectedRecord.id}）</span>
+            </div>
+          )}
+          {onShowReport && selectedRecord && selectedRecord.wounds.length > 0 && (
+            <button onClick={onShowReport}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all"
+              style={{ borderColor: 'rgba(255,214,10,0.3)', color: '#FFD60A', backgroundColor: 'rgba(255,214,10,0.06)' }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,214,10,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'rgba(255,214,10,0.06)')}
+            >
+              <Megaphone className="w-3.5 h-3.5" /> 生成事件通报
+            </button>
+          )}
         </div>
 
         {/* Table */}
-        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#0E0E10', borderColor: '#1E1E22' }}>
-          <table className="w-full border-collapse">
+        <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: '#0E0E10', borderColor: '#1E1E22', scrollbarWidth: 'thin' }}>
+          <table className="w-full border-collapse" style={{ minWidth: 780 }}>
             <thead>
               <tr style={{ backgroundColor: '#111114', borderBottom: '1px solid #1E1E22' }}>
-                <th className={thCls} style={thStyle}>机轮</th>
+                <th className={thCls} style={thStyle}>损伤位置</th>
                 <th className={thCls} style={thStyle}>状态</th>
                 <th className={thCls} style={thStyle}>上次损伤</th>
                 <th className={thCls} style={thStyle}>距今</th>
                 <th className={thCls} style={thStyle}>当次航班</th>
-                <th className={thCls} style={thStyle}>飞机编号</th>
                 <th className={thCls} style={{ ...thStyle, textAlign: 'right' }}>历史次数</th>
                 <th className={thCls} style={thStyle}>近12个月趋势</th>
               </tr>
             </thead>
             <tbody>
-              {model.tires.map((tire) => {
+              {tires.map((tire) => {
                 const latest = tire.damageHistory?.[0];
                 const statusColor = getStatusColor(tire.status);
                 const newWounds = woundCountByTire[tire.id] ?? 0;
@@ -114,7 +120,7 @@ export function TireTable({ record }: TireTableProps) {
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#111114')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
-                    {/* 机轮 */}
+                    {/* 损伤位置 */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <span className="w-2 h-2 rounded-full flex-shrink-0"
@@ -159,10 +165,6 @@ export function TireTable({ record }: TireTableProps) {
                         </span>
                       ) : '—'}
                     </td>
-                    {/* 飞机编号 */}
-                    <td className="px-4 py-3 text-sm font-mono whitespace-nowrap" style={{ color: '#8A8A93' }}>
-                      {latest?.aircraftNo ?? '—'}
-                    </td>
                     {/* 历史次数 */}
                     <td className="px-4 py-3 text-right">
                       <span className="text-sm font-bold"
@@ -183,7 +185,7 @@ export function TireTable({ record }: TireTableProps) {
 
         {/* Footer hint */}
         <p className="text-xs mt-3" style={{ color: '#5A5A60' }}>
-          「当次航班」为该轮胎最近一次损伤所对应的航班（起飞地 → 降落跑道）；标红「本次+N」表示当前选中航班新发现的伤口；点击任意行查看该机轮完整损伤履历。
+          「当次航班」为该位置最近一次损伤所对应的航班（起飞地 → 降落跑道）；标红「本次+N」表示最新一次检查中该位置的伤口数；点击任意行查看该位置完整损伤履历。
         </p>
       </div>
 
